@@ -187,7 +187,7 @@ export class GameRenderer implements ScreenProjector {
       this.renderer.shadowMap.enabled = shadows;
       this.scene.traverse((o) => {
         if (o instanceof THREE.Mesh) {
-          const mesh = o as THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
+          const mesh = o as THREE.Mesh;
           const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           for (const m of mats) m.needsUpdate = true;
         }
