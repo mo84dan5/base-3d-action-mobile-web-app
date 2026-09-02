@@ -64,22 +64,28 @@ export default defineConfig(
           zones: [
             {
               target: './src/domain',
-              from: ['./src/application', './src/infrastructure', './src/ui', './src/main.ts'],
+              from: [
+                './src/application',
+                './src/infrastructure',
+                './src/ui',
+                './src/app',
+                './src/main.ts',
+              ],
               message: 'domain は他の層に依存できません(F07)',
             },
             {
               target: './src/application',
-              from: ['./src/infrastructure', './src/ui', './src/main.ts'],
+              from: ['./src/infrastructure', './src/ui', './src/app', './src/main.ts'],
               message: 'application は infrastructure / ui に依存できません(F07)',
             },
             {
               target: './src/infrastructure',
-              from: './src/ui',
+              from: ['./src/ui', './src/app'],
               message: 'infrastructure は ui に依存できません(F07)',
             },
             {
               target: './src/ui',
-              from: './src/infrastructure',
+              from: ['./src/infrastructure', './src/app'],
               message: 'ui は infrastructure に依存できません(F07)',
             },
           ],
