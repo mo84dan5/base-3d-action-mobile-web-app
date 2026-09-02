@@ -209,7 +209,8 @@ describe('敵の攻撃と被弾(F04 / F10)', () => {
     const h = new Harness(layout({ enemies: [{ kind: 'patrol', position: vec3(0, 0, 1.2) }] }));
     h.skipCountdown();
     h.session.energy = { value: 100, max: 100 };
-    h.session.enemies[0]!.state = { ...h.enemy(1), ai: 'chase' };
+    const slot = h.session.enemies[0];
+    if (slot) slot.state = { ...h.enemy(1), ai: 'chase' };
     h.step([{ type: 'BurstPressed' }]);
     h.run(1.0);
     expect(h.session.player.hp).toBe(100);

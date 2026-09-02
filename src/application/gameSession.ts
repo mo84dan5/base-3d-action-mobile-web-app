@@ -387,7 +387,7 @@ export class GameSession {
   ): void {
     const { config } = this;
     const attack = this.player.attack;
-    if (!attack || attack.attackId !== attackId) return;
+    if (attack?.attackId !== attackId) return;
     if (
       attack.hitTargets.length === 0 &&
       kind === 'skill' &&
