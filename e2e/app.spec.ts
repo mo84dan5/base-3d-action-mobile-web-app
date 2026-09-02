@@ -224,7 +224,7 @@ test.describe('F06 設定と永続化', () => {
 });
 
 test.describe('F04 戦闘(補助入力)', () => {
-  test('キーボードで訓練用ダミーへ近づいて攻撃すると HP が減り、ダメージ数値と敵 HP バーが出る', async ({
+  test('キーボードで正面の徘徊型へ近づいて攻撃すると HP が減り、敵 HP バーが出る', async ({
     page,
   }) => {
     await page.goto('./?debug=1');
@@ -234,41 +234,55 @@ test.describe('F04 戦闘(補助入力)', () => {
     await page.waitForFunction(() => window.__b3dDebug?.view()?.hud.phase === 'playing', null, {
       timeout: 20_000,
     });
-    await page.keyboard.down('KeyW');
-    await page.keyboard.down('KeyD');
-    await page.waitForFunction(
-      () => {
+    // 徘徊型(id 3)は開始地点の正面 +z 方向 20 m にいる。W だけで近づき、正面のまま攻撃する
+    const TARGET = 3;
+    const distance = () =>
+      page.evaluate((id) => {
         const v = window.__b3dDebug?.view();
-        const e = v?.enemies.find((x) => x.id === 1);
+        const e = v?.enemies.find((x) => x.id === id);
+        if (!v || !e) return Infinity;
+        return Math.hypot(e.position.x - v.player.position.x, e.position.z - v.player.position.z);
+      }, TARGET);
+    await page.keyboard.down('KeyW');
+    await page.waitForFunction(
+      (id) => {
+        const v = window.__b3dDebug?.view();
+        const e = v?.enemies.find((x) => x.id === id);
         if (!v || !e) return false;
         return (
-          Math.hypot(e.position.x - v.player.position.x, e.position.z - v.player.position.z) < 2.6
+          Math.hypot(e.position.x - v.player.position.x, e.position.z - v.player.position.z) < 2.4
         );
       },
-      null,
-      { timeout: 20_000 },
+      TARGET,
+      { timeout: 30_000 },
     );
     await page.keyboard.up('KeyW');
-    await page.keyboard.up('KeyD');
     const enemyHp = () =>
-      page.evaluate(() => window.__b3dDebug?.view()?.enemies.find((x) => x.id === 1)?.hp ?? 200);
-    const worldTime = () => page.evaluate(() => window.__b3dDebug?.view()?.worldTime ?? 0);
+      page.evaluate(
+        (id) => window.__b3dDebug?.view()?.enemies.find((x) => x.id === id)?.hp ?? 60,
+        TARGET,
+      );
     // 実行環境の描画速度に依存しないよう、ワールド時間(物理ステップの累積)で待つ
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 12; i++) {
       await page.waitForFunction(
         () => window.__b3dDebug?.view()?.hud.buttons.attack.enabled === true,
         null,
         { timeout: 20_000 },
       );
-      const t0 = await worldTime();
+      const t0 = await page.evaluate(() => window.__b3dDebug?.view()?.worldTime ?? 0);
       await tap(page, 'btn-attack');
       await page.waitForFunction((t) => (window.__b3dDebug?.view()?.worldTime ?? 0) > t + 0.5, t0, {
         timeout: 20_000,
       });
-      if ((await enemyHp()) < 200) break;
+      if ((await enemyHp()) < 60) break;
     }
-    const debug = await page.evaluate(() => JSON.stringify(window.__b3dDebug?.view()?.player));
-    expect(await enemyHp(), debug).toBeLessThan(200);
-    await expect(page.getByTestId('enemy-hp-1')).toBeVisible();
+    const debug = await page.evaluate(() =>
+      JSON.stringify({
+        player: window.__b3dDebug?.view()?.player,
+        enemies: window.__b3dDebug?.view()?.enemies,
+      }),
+    );
+    expect(await enemyHp(), `${debug} distance=${await distance()}`).toBeLessThan(60);
+    await expect(page.getByTestId(`enemy-hp-${TARGET}`)).toBeVisible();
   });
 });
