@@ -250,18 +250,25 @@ test.describe('F04 戦闘(補助入力)', () => {
     );
     await page.keyboard.up('KeyW');
     await page.keyboard.up('KeyD');
-    for (let i = 0; i < 8; i++) {
-      await tap(page, 'btn-attack');
-      await page.waitForTimeout(500);
-      const hp = await page.evaluate(
-        () => window.__b3dDebug?.view()?.enemies.find((x) => x.id === 1)?.hp ?? 200,
+    const enemyHp = () =>
+      page.evaluate(() => window.__b3dDebug?.view()?.enemies.find((x) => x.id === 1)?.hp ?? 200);
+    const worldTime = () => page.evaluate(() => window.__b3dDebug?.view()?.worldTime ?? 0);
+    // 実行環境の描画速度に依存しないよう、ワールド時間(物理ステップの累積)で待つ
+    for (let i = 0; i < 10; i++) {
+      await page.waitForFunction(
+        () => window.__b3dDebug?.view()?.hud.buttons.attack.enabled === true,
+        null,
+        { timeout: 20_000 },
       );
-      if (hp < 200) break;
+      const t0 = await worldTime();
+      await tap(page, 'btn-attack');
+      await page.waitForFunction((t) => (window.__b3dDebug?.view()?.worldTime ?? 0) > t + 0.5, t0, {
+        timeout: 20_000,
+      });
+      if ((await enemyHp()) < 200) break;
     }
-    const hp = await page.evaluate(
-      () => window.__b3dDebug?.view()?.enemies.find((x) => x.id === 1)?.hp ?? 200,
-    );
-    expect(hp).toBeLessThan(200);
+    const debug = await page.evaluate(() => JSON.stringify(window.__b3dDebug?.view()?.player));
+    expect(await enemyHp(), debug).toBeLessThan(200);
     await expect(page.getByTestId('enemy-hp-1')).toBeVisible();
   });
 });
