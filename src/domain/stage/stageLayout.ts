@@ -68,28 +68,28 @@ export const stageLayout: StageLayout = {
   playerStartYaw: 0,
   signboard: { position: { x: 2.5, y: 0, z: 2.5 }, label: '看板' },
   primitives: [
-    // 2. 緩い丘: 斜度 20 度、高さ 4 m、頂上は直径 6 m の平坦
+    // 2. 緩い丘: 斜度 20 度、高さ 4 m、幅 6 m。z = 16 から −z 方向へ登り、頂上は直径 6 m の平坦(円柱)
     {
       kind: 'ramp',
       name: 'hill_slope',
-      base: { x: -6, y: 0, z: -18 },
-      yaw: 0,
+      base: { x: -10, y: 0, z: 16 },
+      yaw: Math.PI,
       slopeDeg: 20,
       height: 4,
-      width: 10,
+      width: 6,
       climbable: false,
       color: COLOR_GRASS,
     },
     {
       kind: 'cylinder',
       name: 'hill_top',
-      center: { x: -6, y: 2, z: -18 - 4 / Math.tan(degToRad(20)) - 3 },
+      center: { x: -10, y: 2, z: 16 - 4 / Math.tan(degToRad(20)) - 3 },
       radius: 3,
       height: 4,
       climbable: false,
       color: COLOR_GRASS,
     },
-    // 3. 急な坂: 斜度 45 度、高さ 3 m(滑り面)
+    // 3. 急な坂: 斜度 45 度、高さ 3 m(滑り面)。z = −12 から +z 方向へ登る。背面は高さ 3 m の登攀不可の壁
     {
       kind: 'ramp',
       name: 'steep_slope',
@@ -101,19 +101,11 @@ export const stageLayout: StageLayout = {
       climbable: false,
       color: COLOR_DIRT,
     },
-    {
-      kind: 'box',
-      name: 'steep_slope_back',
-      center: { x: 12, y: 1.5, z: -12 - 3 - 1 },
-      size: { x: 6, y: 3, z: 2 },
-      climbable: false,
-      color: COLOR_DIRT,
-    },
-    // 4. 崖(登攀可): 高さ 6 m、幅 8 m の垂直面。上は 10 m × 10 m の台地。崖面以外は登攀不可
+    // 4. 崖(登攀可): 高さ 6 m、幅 8 m の垂直面(z = −20、−z 側)。上は 10 m × 10 m の台地。崖面以外の 3 側面は登攀不可
     {
       kind: 'box',
       name: 'cliff_face',
-      center: { x: 0, y: 3, z: -30 + 5 },
+      center: { x: 0, y: 3, z: -25 },
       size: { x: 8, y: 6, z: 10 },
       climbable: true,
       color: COLOR_ROCK,
@@ -121,7 +113,7 @@ export const stageLayout: StageLayout = {
     {
       kind: 'box',
       name: 'cliff_side_left',
-      center: { x: -5, y: 3, z: -30 + 5 },
+      center: { x: -5, y: 3, z: -25 },
       size: { x: 2, y: 6, z: 10 },
       climbable: false,
       color: COLOR_ROCK,
@@ -129,16 +121,17 @@ export const stageLayout: StageLayout = {
     {
       kind: 'box',
       name: 'cliff_side_right',
-      center: { x: 5, y: 3, z: -30 + 5 },
+      center: { x: 5, y: 3, z: -25 },
       size: { x: 2, y: 6, z: 10 },
       climbable: false,
       color: COLOR_ROCK,
     },
-    // 5. 高い崖: 高さ 20 m。高さ 10 m に幅 2 m のテラス。裏側に斜度 20 度のスロープ
+    // 5. 高い崖: 高さ 20 m(x = 16 の面を登る)。高さ 10 m に幅 2 m のテラス(下段 x 16〜18 の上面)。
+    //    裏側(東)に斜度 20 度のスロープ: A(南端を +x へ)→ B(東端を −z へ)→ 橋 で頂上へ
     {
       kind: 'box',
       name: 'tall_cliff_lower',
-      center: { x: 22, y: 5, z: 4 },
+      center: { x: 20, y: 5, z: 0 },
       size: { x: 8, y: 10, z: 8 },
       climbable: true,
       color: COLOR_ROCK,
@@ -146,27 +139,54 @@ export const stageLayout: StageLayout = {
     {
       kind: 'box',
       name: 'tall_cliff_upper',
-      center: { x: 22, y: 15, z: 5 },
-      size: { x: 8, y: 10, z: 6 },
+      center: { x: 21, y: 15, z: 0 },
+      size: { x: 6, y: 10, z: 8 },
       climbable: true,
       color: COLOR_ROCK,
     },
     {
       kind: 'ramp',
-      name: 'tall_cliff_ramp',
-      base: { x: 22, y: 0, z: 8 + 20 / Math.tan(degToRad(20)) },
-      yaw: Math.PI,
+      name: 'tall_cliff_ramp_a',
+      base: { x: -2, y: 0, z: 27.5 },
+      yaw: Math.PI / 2,
       slopeDeg: 20,
-      height: 20,
-      width: 6,
+      height: 10,
+      width: 4,
       climbable: false,
       color: COLOR_DIRT,
+    },
+    {
+      kind: 'box',
+      name: 'tall_cliff_ramp_support',
+      center: { x: 27.5, y: 5, z: 12 },
+      size: { x: 4, y: 10, z: 27.5 },
+      climbable: false,
+      color: COLOR_ROCK,
+    },
+    {
+      kind: 'ramp',
+      name: 'tall_cliff_ramp_b',
+      base: { x: 27.5, y: 10, z: 25.5 },
+      yaw: Math.PI,
+      slopeDeg: 20,
+      height: 10,
+      width: 4,
+      climbable: false,
+      color: COLOR_DIRT,
+    },
+    {
+      kind: 'box',
+      name: 'tall_cliff_bridge',
+      center: { x: 24.75, y: 19.75, z: -2.5 },
+      size: { x: 1.5, y: 0.5, z: 3 },
+      climbable: false,
+      color: COLOR_ROCK,
     },
     // 6. 登攀不可の壁: 高さ 4 m
     {
       kind: 'box',
       name: 'unclimbable_wall',
-      center: { x: -14, y: 2, z: 8 },
+      center: { x: -24, y: 2, z: 14 },
       size: { x: 6, y: 4, z: 1 },
       climbable: false,
       color: COLOR_DIRT,
@@ -196,7 +216,7 @@ export const stageLayout: StageLayout = {
       climbable: false,
       color: COLOR_ROCK,
     },
-    // 8. オーバーハング: 下部は登攀可の壁、上部が手前に張り出す(張り出し部の下面は天井)
+    // 8. オーバーハング: 下部は登攀可の壁(z = −2 の面)、上部が +z 側へ 1.5 m 張り出す(張り出し部の下面は天井)
     {
       kind: 'box',
       name: 'overhang_lower',
@@ -208,7 +228,7 @@ export const stageLayout: StageLayout = {
     {
       kind: 'box',
       name: 'overhang_upper',
-      center: { x: -22, y: 6, z: -4 + 1.5 },
+      center: { x: -22, y: 6, z: -2.5 },
       size: { x: 6, y: 2, z: 7 },
       climbable: true,
       color: COLOR_ROCK,
@@ -241,7 +261,7 @@ export const stageLayout: StageLayout = {
       climbable: false,
       color: COLOR_ROCK,
     },
-    // 10. 外周の壁: 高さ 30 m、透明、登攀不可(±30 m)
+    // 10. 外周の壁: 高さ 30 m、透明、登攀不可(内側の面が ±30 m)
     {
       kind: 'box',
       name: 'boundary_north',
@@ -278,6 +298,6 @@ export const stageLayout: StageLayout = {
   enemies: [
     { kind: 'dummy', position: { x: -4, y: 0, z: 5 } },
     { kind: 'patrol', position: { x: 6, y: 0, z: -6 } },
-    { kind: 'patrol', position: { x: -8, y: 0, z: 14 } },
+    { kind: 'patrol', position: { x: -2, y: 0, z: 20 } },
   ],
 };
