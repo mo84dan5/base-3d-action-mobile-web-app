@@ -412,3 +412,91 @@ test.describe('S02 の設定反映とバックグラウンド化', () => {
     expect(errors).toEqual([]);
   });
 });
+
+test.describe('残り項目の裏付け(S02 / F09 / F10)', () => {
+  test('無効なボタン(バースト)上でドラッグしてもカメラは回らない', async ({ page }) => {
+    await page.goto('./?debug=1');
+    const start = page.getByTestId('start');
+    await expect(start).toBeEnabled({ timeout: 30_000 });
+    await start.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
+    await expect(page.getByTestId('btn-burst')).toHaveClass(/disabled/);
+    const yawBefore = await page.evaluate(() => window.__b3dDebug?.view()?.camera.yaw ?? 0);
+    const burst = page.getByTestId('btn-burst');
+    const box = await burst.boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) return;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await burst.dispatchEvent('pointerdown', {
+      pointerType: 'touch',
+      isPrimary: true,
+      button: 0,
+      pointerId: 41,
+      clientX: cx,
+      clientY: cy,
+    });
+    for (let i = 1; i <= 10; i++) {
+      await page
+        .locator('#app')
+        .dispatchEvent('pointermove', {
+          pointerType: 'touch',
+          isPrimary: true,
+          pointerId: 41,
+          clientX: cx + i * 10,
+          clientY: cy,
+        });
+    }
+    await burst.dispatchEvent('pointerup', {
+      pointerType: 'touch',
+      isPrimary: true,
+      button: 0,
+      pointerId: 41,
+      clientX: cx + 100,
+      clientY: cy,
+    });
+    await page.waitForTimeout(300);
+    const yawAfter = await page.evaluate(() => window.__b3dDebug?.view()?.camera.yaw ?? 0);
+    expect(yawAfter).toBeCloseTo(yawBefore, 5);
+  });
+
+  test('一時停止中はワールド時間が進まず、再開後に進む', async ({ page }) => {
+    await page.goto('./?debug=1');
+    const start = page.getByTestId('start');
+    await expect(start).toBeEnabled({ timeout: 30_000 });
+    await start.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
+    await page.waitForFunction(() => (window.__b3dDebug?.view()?.worldTime ?? 0) > 0.5);
+    await tap(page, 'pause');
+    await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+    const t0 = await page.evaluate(() => window.__b3dDebug?.view()?.worldTime ?? 0);
+    await page.waitForTimeout(600);
+    const t1 = await page.evaluate(() => window.__b3dDebug?.view()?.worldTime ?? 0);
+    expect(t1).toBe(t0);
+    await tap(page, 'resume');
+    await page.waitForFunction((t) => (window.__b3dDebug?.view()?.worldTime ?? 0) > t + 0.2, t0);
+  });
+
+  test('バックグラウンド中に回転して復帰すると新しい向きに再配置される', async ({ page }) => {
+    await startGame(page);
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'hidden',
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await expect(page.locator('html')).toHaveAttribute('data-orientation', 'portrait');
+    await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+    const box = await page.getByTestId('action-buttons').boundingBox();
+    expect(box).not.toBeNull();
+    if (box) expect(box.y).toBeGreaterThan(844 / 2);
+  });
+});
