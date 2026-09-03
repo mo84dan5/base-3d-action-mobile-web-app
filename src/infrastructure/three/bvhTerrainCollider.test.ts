@@ -24,9 +24,12 @@ describe('BVH 地形コリジョン(F05)', () => {
     expect(classifySurface(hit?.normal.y ?? 1, physics)).toBe('wall');
     expect(hit?.point.z).toBeCloseTo(-20, 3);
   });
-  it('登攀不可の壁の正面キャストは登攀不可', () => {
-    const hit = terrain.raycast(vec3(-24, 0.85, 11), vec3(0, 0, 1), 5);
-    expect(hit?.unclimbable).toBe(true);
+  it('氷柱の側面は壁に分類され登攀不可、検証用の壁は登攀可', () => {
+    const ice = terrain.raycast(vec3(7, 0.85, 0), vec3(0, 0, 1), 5);
+    expect(ice?.unclimbable).toBe(true);
+    expect(classifySurface(ice?.normal.y ?? 1, physics)).toBe('wall');
+    const wall = terrain.raycast(vec3(-24, 0.85, 11), vec3(0, 0, 1), 5);
+    expect(wall?.unclimbable).toBe(false);
   });
   it('緩い丘の斜面は歩行可能面(20 度)、急な坂は滑り面(45 度)', () => {
     const hill = terrain.raycast(vec3(-10, 5, 10), vec3(0, -1, 0), 10);

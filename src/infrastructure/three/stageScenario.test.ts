@@ -69,11 +69,9 @@ describe('要素 4: 崖(登攀可、高さ 6 m)', () => {
     expect(r.player.position.z).toBeLessThan(-20);
     expect(r.player.stamina.value).toBeGreaterThan(0);
   });
-  it('崖の側面(x = ±4 の登攀不可)には取り付かない', () => {
-    const r = new Run(vec3(-7.5, 0, -25), Math.PI / 2);
-    r.run(3, PLUS_X);
-    expect(r.states.has('climb')).toBe(false);
-    expect(r.player.position.x).toBeLessThan(-6);
+  it('崖の側面(x = −6)も登攀可になり取り付く', () => {
+    const r = new Run(vec3(-8.5, 0, -25), Math.PI / 2);
+    expect(r.until((p) => p.name === 'climb', PLUS_X, 3)).toBe(true);
   });
   it('台地の縁から走り出ると落下する(崖端の落下)', () => {
     const r = new Run(vec3(0, 6, -22));
@@ -153,6 +151,20 @@ describe('要素 2・3: 丘と急な坂', () => {
     expect(r.until((p) => p.name === 'idle' || p.name === 'run', NO_INPUT, 5)).toBe(true);
     expect(r.player.position.y).toBeLessThan(yAtSlide);
     expect(r.maxY).toBeLessThan(3);
+  });
+});
+
+describe('要素 12: 氷柱(唯一の登攀不可)', () => {
+  it('氷柱へ走り込んでも取り付かず、押し戻される', () => {
+    const r = new Run(vec3(7, 0, -1));
+    r.run(3, PLUS_Z);
+    expect(r.states.has('climb')).toBe(false);
+    expect(r.player.position.z).toBeLessThan(3 - 1.5);
+    expect(r.maxY).toBeLessThan(0.5);
+  });
+  it('柱(高さ 3 m)は登攀可になり取り付く', () => {
+    const r = new Run(vec3(8, 0, 8));
+    expect(r.until((p) => p.name === 'climb', PLUS_Z, 3)).toBe(true);
   });
 });
 

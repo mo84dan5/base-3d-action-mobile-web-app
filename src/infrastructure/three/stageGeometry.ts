@@ -34,6 +34,11 @@ function primitiveGeometry(p: StagePrimitive): THREE.BufferGeometry {
     }
     case 'ramp':
       return rampGeometry(p);
+    case 'cone': {
+      const g = new THREE.ConeGeometry(p.radius, p.height, 12);
+      g.translate(p.center.x, p.center.y + p.height / 2, p.center.z);
+      return g;
+    }
   }
 }
 
