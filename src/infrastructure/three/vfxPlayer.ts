@@ -19,6 +19,8 @@ const COLORS = {
   red: '#E5333F',
   darkRed: '#8A1C25',
   grey: '#E6EEF5',
+  patrolBody: '#7a4b9e',
+  dummyBody: '#b8a680',
 } as const;
 
 type ColorName = keyof typeof COLORS;
@@ -351,7 +353,11 @@ export class VfxPlayer implements EffectPort {
         this.burst(event.position);
         break;
       case 'enemyDefeat':
-        this.shardBurst(event.position, 8, 'magenta');
+        this.shardBurst(
+          event.position,
+          8,
+          event.enemyKind === 'dummy' ? 'dummyBody' : 'patrolBody',
+        );
         break;
       case 'playerDefeat':
         break;
@@ -630,16 +636,12 @@ export class VfxPlayer implements EffectPort {
       this.windTimer = 0.12;
       this.spawnWindLines(p.position, p.velocity, hSpeed);
     }
-    this.interactRing.visible = view.hud.interactTargetName !== null && view.hud.phase !== 'ended';
-    if (this.interactRing.visible) {
-      this.interactRing.position.set(view.player.position.x, 0, view.player.position.z);
-      this.interactRing.position.y = 0.05 + 0.15 * (0.5 + 0.5 * Math.sin(this.time * 3));
+    const target = view.hud.interactTargetPosition;
+    this.interactRing.visible = target !== null && view.hud.phase !== 'ended';
+    if (target) {
+      this.interactRing.position.set(target.x, target.y, target.z);
+      this.interactRing.position.y += 0.05 + 0.15 * (0.5 + 0.5 * Math.sin(this.time * 3));
     }
-  }
-
-  setInteractRingTarget(position: { x: number; y: number; z: number } | null): void {
-    if (!position) return;
-    this.interactRing.position.set(position.x, position.y + 0.05, position.z);
   }
 
   private spawnWindLines(

@@ -18,7 +18,12 @@ export type EffectEvent =
       readonly position: Vec3;
       readonly victim: 'player' | 'enemy';
     }
-  | { readonly kind: 'enemyDefeat'; readonly position: Vec3; readonly enemyId: number }
+  | {
+      readonly kind: 'enemyDefeat';
+      readonly position: Vec3;
+      readonly enemyId: number;
+      readonly enemyKind: 'dummy' | 'patrol';
+    }
   | { readonly kind: 'playerDefeat'; readonly position: Vec3 }
   | { readonly kind: 'dash'; readonly position: Vec3; readonly yaw: number }
   | { readonly kind: 'jump'; readonly position: Vec3 }

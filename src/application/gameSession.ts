@@ -290,13 +290,11 @@ export class GameSession {
     const before = this.player;
     const r = stepPlayer(before, stepInput, this.deps.terrain, entityDt, config);
     this.player = r.player;
-    if (
-      this.player.name === 'attack' &&
-      before.name !== 'attack' &&
-      this.player.attack?.elapsed === 0
-    ) {
-      this.player = this.correctTarget(this.player);
-    }
+    const startedAttack =
+      (this.player.name === 'attack' || this.player.name === 'airAttack') &&
+      before.name !== this.player.name &&
+      this.player.attack?.elapsed === 0;
+    if (startedAttack) this.player = this.correctTarget(this.player);
     for (const event of r.events) this.handlePlayerEvent(event);
     if (this.player.name === 'sprint' && entityDt > 0) {
       this.sprintSteps++;
@@ -464,7 +462,12 @@ export class GameSession {
 
   private onEnemyDefeated(enemy: EnemyState): void {
     this.stats = recordDefeat(this.stats);
-    this.effect({ kind: 'enemyDefeat', position: enemy.position, enemyId: enemy.id });
+    this.effect({
+      kind: 'enemyDefeat',
+      position: enemy.position,
+      enemyId: enemy.id,
+      enemyKind: enemy.kind,
+    });
     this.shake('enemyDefeat');
   }
 
@@ -717,6 +720,7 @@ export class GameSession {
       energyFull: isEnergyFull(this.energy),
       indicator: p.name === 'climb' ? 'climb' : p.name === 'glide' ? 'glide' : null,
       interactTargetName: this.interactTarget()?.name ?? null,
+      interactTargetPosition: this.interactTarget()?.position ?? null,
       interactMessage: this.interactMessage?.text ?? null,
       result: this.result,
       stats: this.stats,

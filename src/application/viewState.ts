@@ -65,6 +65,7 @@ export interface HudView {
   readonly energyFull: boolean;
   readonly indicator: 'climb' | 'glide' | null;
   readonly interactTargetName: string | null;
+  readonly interactTargetPosition: Vec3 | null;
   readonly interactMessage: string | null;
   readonly result: GameResult | null;
   readonly stats: Stats;

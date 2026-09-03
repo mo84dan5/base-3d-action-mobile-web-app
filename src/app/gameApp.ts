@@ -183,6 +183,7 @@ export class GameApp {
     if (before.screen === 'play' && this.flow.screen !== 'play') this.cancelInputs();
     if (before.screen !== 'title' && this.flow.screen === 'title') this.session = null;
     if (this.flow.screen === 'pause' && before.screen !== 'pause') this.hud.cancelAllButtons();
+    if (this.flow.screen === 'play' && before.screen !== 'play') this.discardPendingInputs();
     this.applyScreen();
   }
 
@@ -229,6 +230,17 @@ export class GameApp {
         this.config.stick,
       ),
     );
+  }
+
+  /** 停止中(S01・S03・S04)に溜まった押下・移動は S02 に入るときに捨てる(再開直後の誤動作防止)。 */
+  private discardPendingInputs(): void {
+    this.pointer?.drain();
+    this.keyboard?.drain();
+    this.hud.drainCommands();
+    this.buttons.cancelAll();
+    this.pendingCommands = [];
+    this.accumulator = initialAccumulator;
+    this.lastFrameTime = 0;
   }
 
   /** F09 手順 1 / S02 一時停止: 押下中のポインタをすべてキャンセル扱いにする。 */
