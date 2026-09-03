@@ -127,7 +127,7 @@ export const stageLayout: StageLayout = {
       color: COLOR_ROCK,
     },
     // 5. 高い崖: 高さ 20 m(x = 16 の面を登る)。高さ 10 m に幅 2 m のテラス(下段 x 16〜18 の上面)。
-    //    裏側(東)に斜度 20 度のスロープ: A(南端を +x へ)→ B(東端を −z へ)→ 橋 で頂上へ
+    //    裏側(東)に斜度 20 度のスロープ: A(南端を +x へ)→ 角の踊り場(高さ 10 m)→ B(東端を −z へ)→ 橋 で頂上へ
     {
       kind: 'box',
       name: 'tall_cliff_lower',
@@ -158,8 +158,8 @@ export const stageLayout: StageLayout = {
     {
       kind: 'box',
       name: 'tall_cliff_ramp_support',
-      center: { x: 27.5, y: 5, z: 12 },
-      size: { x: 4, y: 10, z: 27.5 },
+      center: { x: 27.5, y: 5, z: 13.875 },
+      size: { x: 4, y: 10, z: 31.25 },
       climbable: false,
       color: COLOR_ROCK,
     },

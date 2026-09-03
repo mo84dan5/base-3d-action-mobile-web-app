@@ -23,9 +23,17 @@ export function stepEnemyPhysics(
   const horizontal: Vec3 = add(enemy.velocity, currentKnockback(enemy));
   if (enemy.grounded) {
     const r = moveOnGround(enemy.position, horizontal, dt, shape, terrain, config);
-    if (r.ground.kind === 'slide') {
-      // 滑り面には進入せず停止する
-      return { enemy: { ...enemy, velocity: vec3(0, 0, 0) }, physics };
+    if (r.ground.kind === 'slide' || r.walls.length > 0) {
+      // 滑り面・壁には進入せず停止する(壁ずりで滑らない)。ノックバック中は押し出し後の位置を採用する
+      const knockedBack = enemy.knockbackRemaining > 0;
+      return {
+        enemy: {
+          ...enemy,
+          position: knockedBack ? r.position : enemy.position,
+          velocity: vec3(0, 0, 0),
+        },
+        physics,
+      };
     }
     if (r.ground.kind === 'none') {
       return {

@@ -286,3 +286,129 @@ test.describe('F04 戦闘(補助入力)', () => {
     await expect(page.getByTestId(`enemy-hp-${TARGET}`)).toBeVisible();
   });
 });
+
+test.describe('F07 入力遅延', () => {
+  test('pointerdown から押下表示までが 2 フレーム以内', async ({ page }) => {
+    await startGame(page);
+    const frames = await page.evaluate(
+      () =>
+        new Promise<number>((resolve) => {
+          const button = document.querySelector<HTMLButtonElement>('[data-testid="btn-jump"]');
+          if (!button) {
+            resolve(99);
+            return;
+          }
+          button.dispatchEvent(
+            new PointerEvent('pointerdown', {
+              pointerType: 'touch',
+              isPrimary: true,
+              button: 0,
+              pointerId: 31,
+              bubbles: true,
+            }),
+          );
+          let count = 0;
+          const check = () => {
+            if (button.classList.contains('pressed')) {
+              resolve(count);
+              return;
+            }
+            count++;
+            if (count > 10) resolve(count);
+            else requestAnimationFrame(check);
+          };
+          check();
+        }),
+    );
+    expect(frames).toBeLessThanOrEqual(2);
+  });
+});
+
+test.describe('S04 リザルトと遷移', () => {
+  test('徘徊型に倒されると敗北のリザルトが出て、再挑戦で S02 に戻り、タイトルへ戻れる', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await page.goto('./?debug=1');
+    const start = page.getByTestId('start');
+    await expect(start).toBeEnabled({ timeout: 30_000 });
+    await start.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
+    // 動かずに待つと徘徊型(id 2)が接近して攻撃し、HP 100 を 15 ずつ削る
+    await page.waitForFunction(() => window.__b3dDebug?.screen() === 'result', null, {
+      timeout: 150_000,
+    });
+    await expect(page.getByTestId('result-heading')).toHaveText('敗北');
+    await expect(page.locator('.stats')).toContainText('経過時間');
+    await expect(page.getByTestId('result-defeated')).toHaveText('0 / 2');
+    const damage = Number(await page.getByTestId('result-damage').textContent());
+    expect(damage).toBeGreaterThanOrEqual(100);
+    await tap(page, 'retry');
+    await expect(page.locator('[data-screen="result"]')).toBeHidden();
+    await expect(page.getByTestId('countdown')).toContainText(/3|2|1|START/);
+    await page.waitForFunction(() => (window.__b3dDebug?.view()?.player.hp ?? 0) === 100);
+    await tap(page, 'pause');
+    await tap(page, 'pause-title');
+    await expect(page.locator('[data-screen="title"]')).toBeVisible();
+    await expect(page.getByTestId('start')).toBeEnabled();
+    await expect(page.locator('.progress')).toBeHidden();
+  });
+});
+
+test.describe('S02 の設定反映とバックグラウンド化', () => {
+  test('固定スティックと FPS 表示は S02 の初回表示から反映される', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'b3d.settings.v1',
+        JSON.stringify({ version: 1, stickMode: 'fixed', showFps: true, quality: 'low' }),
+      );
+    });
+    await startGame(page);
+    const stick = page.getByTestId('stick');
+    await expect(stick).toHaveClass(/visible/);
+    const box = await stick.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      expect(box.x + box.width / 2).toBeCloseTo(844 * 0.25, -1);
+      expect(box.y + box.height / 2).toBeCloseTo(390 * 0.7, -1);
+    }
+    await expect(page.locator('.fps')).toBeVisible();
+    await expect(page.locator('.fps')).toContainText('fps');
+  });
+
+  test('バックグラウンド化(hidden)で S03 が開き、復帰しても自動再開しない', async ({ page }) => {
+    await startGame(page);
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'hidden',
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+    await tap(page, 'resume');
+    await expect(page.locator('[data-screen="pause"]')).toBeHidden();
+  });
+
+  test('表示品質を切り替えても描画が継続しエラーが出ない', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await startGame(page);
+    await tap(page, 'pause');
+    for (const q of ['low', 'high', 'medium']) {
+      const b = page.getByTestId('setting-quality').locator(`button[data-value="${q}"]`);
+      await b.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
+      await expect(b).toHaveClass(/on/);
+    }
+    await tap(page, 'resume');
+    await page.waitForTimeout(500);
+    expect(errors).toEqual([]);
+  });
+});
