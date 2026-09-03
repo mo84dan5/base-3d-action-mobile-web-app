@@ -436,15 +436,13 @@ test.describe('残り項目の裏付け(S02 / F09 / F10)', () => {
       clientY: cy,
     });
     for (let i = 1; i <= 10; i++) {
-      await page
-        .locator('#app')
-        .dispatchEvent('pointermove', {
-          pointerType: 'touch',
-          isPrimary: true,
-          pointerId: 41,
-          clientX: cx + i * 10,
-          clientY: cy,
-        });
+      await page.locator('#app').dispatchEvent('pointermove', {
+        pointerType: 'touch',
+        isPrimary: true,
+        pointerId: 41,
+        clientX: cx + i * 10,
+        clientY: cy,
+      });
     }
     await burst.dispatchEvent('pointerup', {
       pointerType: 'touch',
