@@ -61,6 +61,8 @@ export interface StageLayout {
 const COLOR_GRASS = '#6f8a5f';
 const COLOR_ROCK = '#7c7f84';
 const COLOR_DIRT = '#8a7a66';
+/** 登攀可の岩肌。登攀不可の岩(COLOR_ROCK)と見分けられるよう明るい砂色にする(彩度 30% 以下) */
+const COLOR_CLIMBABLE = '#b3a58c';
 
 export const stageLayout: StageLayout = {
   groundSize: 60,
@@ -108,7 +110,7 @@ export const stageLayout: StageLayout = {
       center: { x: 0, y: 3, z: -25 },
       size: { x: 8, y: 6, z: 10 },
       climbable: true,
-      color: COLOR_ROCK,
+      color: COLOR_CLIMBABLE,
     },
     {
       kind: 'box',
@@ -134,7 +136,7 @@ export const stageLayout: StageLayout = {
       center: { x: 20, y: 5, z: 0 },
       size: { x: 8, y: 10, z: 8 },
       climbable: true,
-      color: COLOR_ROCK,
+      color: COLOR_CLIMBABLE,
     },
     {
       kind: 'box',
@@ -142,7 +144,7 @@ export const stageLayout: StageLayout = {
       center: { x: 21, y: 15, z: 0 },
       size: { x: 6, y: 10, z: 8 },
       climbable: true,
-      color: COLOR_ROCK,
+      color: COLOR_CLIMBABLE,
     },
     {
       kind: 'ramp',
@@ -223,7 +225,7 @@ export const stageLayout: StageLayout = {
       center: { x: -22, y: 2.5, z: -4 },
       size: { x: 6, y: 5, z: 4 },
       climbable: true,
-      color: COLOR_ROCK,
+      color: COLOR_CLIMBABLE,
     },
     {
       kind: 'box',
@@ -231,7 +233,7 @@ export const stageLayout: StageLayout = {
       center: { x: -22, y: 6, z: -2.5 },
       size: { x: 6, y: 2, z: 7 },
       climbable: true,
-      color: COLOR_ROCK,
+      color: COLOR_CLIMBABLE,
     },
     // 9. 柱: 直径 1 m、高さ 3 m × 3 本。登攀不可
     {
