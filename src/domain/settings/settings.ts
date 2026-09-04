@@ -4,12 +4,15 @@ import { clamp } from '../math/vec3';
 
 export type StickMode = 'floating' | 'fixed';
 export type Quality = 'low' | 'medium' | 'high';
+/** 攻撃スタイル(F04): 格闘 / 銃撃 */
+export type AttackStyle = 'melee' | 'gun';
 
 export interface Settings {
   readonly cameraSensitivity: number;
   readonly invertCameraY: boolean;
   readonly invertCameraX: boolean;
   readonly stickMode: StickMode;
+  readonly attackStyle: AttackStyle;
   readonly quality: Quality;
   readonly showFps: boolean;
 }
@@ -26,12 +29,14 @@ export const defaultSettings: Settings = {
   invertCameraY: false,
   invertCameraX: false,
   stickMode: 'floating',
+  attackStyle: 'melee',
   quality: 'medium',
   showFps: false,
 };
 
 const STICK_MODES: readonly StickMode[] = ['floating', 'fixed'];
 const QUALITIES: readonly Quality[] = ['low', 'medium', 'high'];
+const ATTACK_STYLES: readonly AttackStyle[] = ['melee', 'gun'];
 
 /** 感度を 0.5〜2.0 にクランプし 0.1 刻みに丸める。 */
 export function normalizeSensitivity(value: number): number {
@@ -76,6 +81,7 @@ function fieldsFrom(data: Record<string, unknown>): Settings {
     invertCameraY: readBoolean(data.invertCameraY, defaultSettings.invertCameraY),
     invertCameraX: readBoolean(data.invertCameraX, defaultSettings.invertCameraX),
     stickMode: readEnum(data.stickMode, STICK_MODES, defaultSettings.stickMode),
+    attackStyle: readEnum(data.attackStyle, ATTACK_STYLES, defaultSettings.attackStyle),
     quality: readEnum(data.quality, QUALITIES, defaultSettings.quality),
     showFps: readBoolean(data.showFps, defaultSettings.showFps),
   };

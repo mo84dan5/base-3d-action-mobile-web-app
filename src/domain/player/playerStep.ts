@@ -53,6 +53,7 @@ import {
   type MoveResult,
 } from './playerPhysics';
 import type { AttackData, PlayerState, PlayerStateName } from './playerState';
+import type { AttackStyle } from '../settings/settings';
 
 // プレイヤーの状態更新(F01 / F04 / F08)。1 物理ステップぶんを純粋関数として進める。
 // dt はエンティティ時間(ヒットストップ中は 0)。
@@ -67,8 +68,16 @@ export interface PlayerStepInput {
   readonly burst: boolean;
   readonly sprintHoldStart: boolean;
   readonly sprintHoldEnd: boolean;
+  readonly attackHoldStart: boolean;
+  readonly attackHoldEnd: boolean;
   /** 開始カウントダウン中は false(攻撃・スキル・バースト無効) */
   readonly actionsAllowed: boolean;
+  /** 攻撃スタイル(F06 attackStyle) */
+  readonly attackStyle: AttackStyle;
+  /** 接近強攻撃のターゲット補正(±45 度・6 m の最近接敵。application が求める) */
+  readonly strongTarget: { readonly yaw: number; readonly distance: number } | null;
+  /** 射撃・タメ打ちのターゲット補正(±15 度・12 m の最近接敵) */
+  readonly shootTarget: { readonly yaw: number } | null;
 }
 
 export const NO_INPUT: PlayerStepInput = {
@@ -81,7 +90,12 @@ export const NO_INPUT: PlayerStepInput = {
   burst: false,
   sprintHoldStart: false,
   sprintHoldEnd: false,
+  attackHoldStart: false,
+  attackHoldEnd: false,
   actionsAllowed: true,
+  attackStyle: 'melee',
+  strongTarget: null,
+  shootTarget: null,
 };
 
 export interface PlayerStepResult {
@@ -216,6 +230,84 @@ function startSpecial(p: PlayerState, ctx: Ctx, name: 'skill' | 'burst'): Player
   };
 }
 
+function startStrongAttack(p: PlayerState, ctx: Ctx): PlayerState {
+  const { config, input } = ctx;
+  const sa = config.combat.strongAttack;
+  const attackId = p.attackCounter + 1;
+  const yaw = input.strongTarget ? input.strongTarget.yaw : p.yaw;
+  const maxLunge = sa.lungeSpeed * sa.lungeMaxTime;
+  const lungeLimit = input.strongTarget
+    ? Math.min(maxLunge, Math.max(0, input.strongTarget.distance - sa.lungeStopDistance))
+    : maxLunge;
+  const dir = directionFromYaw(yaw);
+  ctx.events.push({ type: 'attackStarted', kind: 'strongAttack', stage: 1 });
+  const phase = lungeLimit <= 1e-3 ? 'swing' : 'lunge';
+  if (phase === 'lunge') ctx.events.push({ type: 'lungeStarted', direction: dir });
+  return withStamina(
+    {
+      ...enter(p, 'strongAttack'),
+      yaw,
+      velocity: ZERO3,
+      attackCounter: attackId,
+      attack: { stage: 1, elapsed: 0, attackId, hitTargets: [], bufferedAttack: false },
+      strong: { phase, lungeDir: dir, lungeTime: 0, lungeTravelled: 0, lungeLimit },
+      lastAttackStage: 0,
+      comboWindowRemaining: 0,
+    },
+    ctx,
+    consumeStamina(p.stamina, sa.staminaCost, config.stamina),
+  );
+}
+
+function startShoot(p: PlayerState, ctx: Ctx): PlayerState {
+  const attackId = p.attackCounter + 1;
+  const yaw = ctx.input.shootTarget ? ctx.input.shootTarget.yaw : p.yaw;
+  ctx.events.push({ type: 'attackStarted', kind: 'shoot', stage: 1 });
+  return {
+    ...enter(p, 'shoot'),
+    yaw,
+    velocity: p.grounded ? vec3(0, 0, 0) : p.velocity,
+    attackCounter: attackId,
+    attack: { stage: 1, elapsed: 0, attackId, hitTargets: [], bufferedAttack: false },
+  };
+}
+
+function startCharge(p: PlayerState, ctx: Ctx): PlayerState {
+  ctx.events.push({ type: 'chargeStarted' });
+  return {
+    ...enter(p, 'charge'),
+    attack: null,
+    chargeTime: 0,
+    velocity: vec3(p.velocity.x, 0, p.velocity.z),
+  };
+}
+
+function startChargedShot(p: PlayerState, ctx: Ctx): PlayerState {
+  const { config } = ctx;
+  const attackId = p.attackCounter + 1;
+  const ratio = Math.min(1, p.chargeTime / config.combat.chargedShot.maxChargeTime);
+  const yaw = ctx.input.shootTarget ? ctx.input.shootTarget.yaw : p.yaw;
+  ctx.events.push({ type: 'attackStarted', kind: 'chargedShot', stage: 1 });
+  return {
+    ...enter(p, 'chargedShot'),
+    yaw,
+    velocity: ZERO3,
+    attackCounter: attackId,
+    chargeRatio: ratio,
+    chargeTime: 0,
+    attack: { stage: 1, elapsed: 0, attackId, hitTargets: [], bufferedAttack: false },
+  };
+}
+
+/** 強制解放(向き切替・一時停止)でタメを破棄する。application から呼ぶ。 */
+export function cancelCharge(p: PlayerState): { player: PlayerState; events: PlayerEvent[] } {
+  if (p.name !== 'charge') return { player: p, events: [] };
+  return {
+    player: { ...enter(p, 'idle'), chargeTime: 0, velocity: ZERO3 },
+    events: [{ type: 'chargeCancelled' }],
+  };
+}
+
 function startClimb(p: PlayerState, ctx: Ctx, wall: AttachCandidate): PlayerState {
   ctx.events.push({ type: 'climbAttached', wallNormal: wall.normal });
   if (p.name === 'glide') ctx.events.push({ type: 'glideEnded', reason: 'climb' });
@@ -309,7 +401,12 @@ function stepGroundLocomotion(p: PlayerState, ctx: Ctx): PlayerState {
   if (input.actionsAllowed) {
     if (input.burst) return startSpecial(p, ctx, 'burst');
     if (input.skill) return startSpecial(p, ctx, 'skill');
+    if (input.attackHoldStart) {
+      if (input.attackStyle === 'gun') return startCharge(p, ctx);
+      if (!isStaminaEmpty(p.stamina)) return startStrongAttack(p, ctx);
+    }
     if (input.attack) {
+      if (input.attackStyle === 'gun') return startShoot(p, ctx);
       return startAttack(p, ctx, nextComboStage(p.lastAttackStage, p.comboWindowRemaining));
     }
   }
@@ -410,6 +507,8 @@ function resolveAirJumpInput(p: PlayerState, ctx: Ctx): PlayerState {
 
 function stepAirborne(p: PlayerState, ctx: Ctx): PlayerState {
   const { config, dt, input } = ctx;
+  if (input.attack && input.actionsAllowed && input.attackStyle === 'gun')
+    return startShoot(p, ctx);
   if (input.attack && input.actionsAllowed && !p.airAttackUsed) return startAirAttack(p, ctx);
   if (input.jump) {
     const resolved = resolveAirJumpInput(p, ctx);
@@ -619,6 +718,12 @@ function attackTiming(p: PlayerState, ctx: Ctx) {
       return c.skill;
     case 'burst':
       return c.burst;
+    case 'strongAttack':
+      return c.strongAttack;
+    case 'shoot':
+      return c.shoot;
+    case 'chargedShot':
+      return c.chargedShot;
     default:
       return normalStage(p, ctx);
   }
@@ -637,6 +742,12 @@ function attackKindOf(p: PlayerState): AttackKind {
       return 'skill';
     case 'burst':
       return 'burst';
+    case 'strongAttack':
+      return 'strongAttack';
+    case 'shoot':
+      return 'shoot';
+    case 'chargedShot':
+      return 'chargedShot';
     default:
       return `normal${p.attack?.stage ?? 1}`;
   }
@@ -656,7 +767,13 @@ function emitActive(p: PlayerState, ctx: Ctx, attack: AttackData): void {
         ctx.config.physics.playerCapsuleHeight / 2,
       );
   const radius =
-    p.name === 'skill' ? c.skill.radius : p.name === 'burst' ? c.burst.radius : c.hitSphereRadius;
+    p.name === 'skill'
+      ? c.skill.radius
+      : p.name === 'burst'
+        ? c.burst.radius
+        : p.name === 'strongAttack'
+          ? c.strongAttack.radius
+          : c.hitSphereRadius;
   ctx.events.push({
     type: 'attackActive',
     kind,
@@ -673,6 +790,15 @@ function stepGroundAttack(p: PlayerState, ctx: Ctx): PlayerState {
   const { config, dt, input } = ctx;
   const timing = attackTiming(p, ctx);
   const isNormal = p.name === 'attack';
+  if (
+    isNormal &&
+    input.attackHoldStart &&
+    input.attackStyle === 'melee' &&
+    !isStaminaEmpty(p.stamina)
+  ) {
+    ctx.events.push({ type: 'attackEnded', kind: attackKindOf(p) });
+    return startStrongAttack(p, ctx);
+  }
   if (isNormal && canCancelAttack(attack.elapsed, timing)) {
     if (input.jump) return startJump(p, ctx);
     if (input.dash && !isStaminaEmpty(p.stamina)) return startDash(p, ctx);
@@ -754,6 +880,188 @@ function stepAirAttack(p: PlayerState, ctx: Ctx): PlayerState {
   return startFall({ ...next, attack: null }, ctx, false);
 }
 
+function stepStrongAttack(p: PlayerState, ctx: Ctx): PlayerState {
+  const strong = p.strong;
+  const attack = p.attack;
+  if (!strong || !attack) return enter(p, 'idle');
+  const { config, dt } = ctx;
+  const sa = config.combat.strongAttack;
+  if (strong.phase === 'lunge') {
+    // 最後のステップは残り距離に合わせて速度を落とし、目標の手前 1.0 m を越えないようにする
+    const remaining = Math.max(0, strong.lungeLimit - strong.lungeTravelled);
+    const stepDistance = Math.min(sa.lungeSpeed * dt, remaining);
+    const velocity = scale(strong.lungeDir, dt > 0 ? stepDistance / dt : 0);
+    const r = moveOnGround(p.position, velocity, dt, playerCapsule(config), ctx.terrain, config);
+    const travelled = strong.lungeTravelled + stepDistance;
+    const lungeTime = strong.lungeTime + dt;
+    let next: PlayerState = {
+      ...applyGround(p, r),
+      velocity: ZERO3,
+      stateTime: p.stateTime + dt,
+      strong: { ...strong, lungeTime, lungeTravelled: travelled },
+    };
+    if (r.ground.kind === 'none') {
+      ctx.events.push({ type: 'attackEnded', kind: 'strongAttack' });
+      return startFall({ ...next, strong: null, attack: null }, ctx, false);
+    }
+    if (r.ground.kind === 'slide') return enterSlide({ ...next, strong: null, attack: null }, ctx);
+    if (
+      lungeTime + 1e-9 >= sa.lungeMaxTime ||
+      travelled + 1e-9 >= strong.lungeLimit ||
+      r.walls.length > 0
+    ) {
+      next = {
+        ...next,
+        strong: { ...strong, lungeTime, lungeTravelled: travelled, phase: 'swing' },
+      };
+    }
+    return next;
+  }
+  const elapsed = attack.elapsed + dt;
+  let next: PlayerState = { ...p, stateTime: p.stateTime + dt, attack: { ...attack, elapsed } };
+  if (attackPhase(elapsed, sa) === 'active' && next.attack) emitActive(next, ctx, next.attack);
+  const r = moveOnGround(next.position, ZERO3, dt, playerCapsule(config), ctx.terrain, config);
+  next = { ...applyGround(next, r), velocity: ZERO3 };
+  if (r.ground.kind === 'none') {
+    ctx.events.push({ type: 'attackEnded', kind: 'strongAttack' });
+    return startFall({ ...next, strong: null, attack: null }, ctx, false);
+  }
+  next = regen(next, ctx, true);
+  if (elapsed < sa.total) return next;
+  ctx.events.push({ type: 'attackEnded', kind: 'strongAttack' });
+  return enter({ ...next, attack: null, strong: null }, 'idle');
+}
+
+function shotOrigin(p: PlayerState, ctx: Ctx): Vec3 {
+  return add(p.position, vec3(0, ctx.config.climb.attachCheckHeights[0], 0));
+}
+
+function stepShoot(p: PlayerState, ctx: Ctx): PlayerState {
+  const attack = p.attack;
+  if (!attack) return enter(p, 'idle');
+  const { config, dt, input } = ctx;
+  const timing = config.combat.shoot;
+  if (input.attackHoldStart && input.attackStyle === 'gun' && p.grounded)
+    return startCharge(p, ctx);
+  const elapsed = attack.elapsed + dt;
+  const buffered = attack.bufferedAttack || input.attack;
+  let next: PlayerState = {
+    ...p,
+    stateTime: p.stateTime + dt,
+    attack: { ...attack, elapsed, bufferedAttack: buffered },
+  };
+  if (attack.elapsed < timing.startup && elapsed >= timing.startup) {
+    ctx.events.push({
+      type: 'shotFired',
+      kind: 'shoot',
+      attackId: attack.attackId,
+      origin: shotOrigin(p, ctx),
+      direction: directionFromYaw(p.yaw),
+      range: timing.range,
+      damage: timing.damage,
+      pierce: false,
+      chargeRatio: 0,
+    });
+  }
+  if (next.grounded) {
+    const r = moveOnGround(next.position, ZERO3, dt, playerCapsule(config), ctx.terrain, config);
+    next = { ...applyGround(next, r), velocity: ZERO3 };
+    if (r.ground.kind === 'slide') return enterSlide({ ...next, attack: null }, ctx);
+    if (r.ground.kind !== 'none') next = regen(next, ctx, true);
+  } else {
+    const gravity = applyGravity(next.velocity, ctx);
+    next = { ...next, velocity: gravity.velocity };
+    const r = moveInAir(
+      next.position,
+      gravity.moveVelocity,
+      dt,
+      playerCapsule(config),
+      ctx.terrain,
+      config,
+    );
+    next = {
+      ...applyGround(next, r),
+      velocity: vec3(r.velocity.x, gravity.velocity.y, r.velocity.z),
+    };
+    if (r.ground.kind === 'walkable') {
+      ctx.events.push({ type: 'landed', fallSpeed: Math.max(0, -p.velocity.y) });
+      next = { ...next, velocity: vec3(r.velocity.x, 0, r.velocity.z), airAttackUsed: false };
+    }
+    if (r.ground.kind === 'slide') return enterSlide({ ...next, attack: null }, ctx);
+  }
+  if (elapsed < timing.total) return next;
+  ctx.events.push({ type: 'attackEnded', kind: 'shoot' });
+  if (buffered && input.actionsAllowed) return startShoot({ ...next, attack: null }, ctx);
+  if (next.grounded) return enter({ ...next, attack: null }, nextGroundState(next, ctx));
+  return startFall({ ...next, attack: null }, ctx, false);
+}
+
+function stepCharge(p: PlayerState, ctx: Ctx): PlayerState {
+  const { config, dt, input } = ctx;
+  if (input.attackHoldEnd) return startChargedShot(p, ctx);
+  const cs = config.combat.chargedShot;
+  const speed = Math.min(cs.chargeMoveSpeed, groundSpeedFor(ctx.magnitude, config));
+  const target = scale(ctx.moveDir, speed);
+  const velocity = moveVelocityTowards(
+    vec3(p.velocity.x, 0, p.velocity.z),
+    target,
+    config.movement.acceleration * dt,
+  );
+  let next = turnTowards(
+    { ...p, velocity, chargeTime: p.chargeTime + dt, stateTime: p.stateTime + dt },
+    ctx.moveDir,
+    config.movement.turnSpeedDeg,
+    dt,
+  );
+  const r = moveOnGround(
+    next.position,
+    next.velocity,
+    dt,
+    playerCapsule(config),
+    ctx.terrain,
+    config,
+  );
+  next = applyGround(next, r);
+  if (r.ground.kind === 'none' || r.ground.kind === 'slide') {
+    ctx.events.push({ type: 'chargeCancelled' });
+    next = { ...next, chargeTime: 0 };
+    return r.ground.kind === 'none' ? startFall(next, ctx, true) : enterSlide(next, ctx);
+  }
+  return regen(next, ctx, true);
+}
+
+function stepChargedShot(p: PlayerState, ctx: Ctx): PlayerState {
+  const attack = p.attack;
+  if (!attack) return enter(p, 'idle');
+  const { config, dt } = ctx;
+  const cs = config.combat.chargedShot;
+  const elapsed = attack.elapsed + dt;
+  let next: PlayerState = { ...p, stateTime: p.stateTime + dt, attack: { ...attack, elapsed } };
+  if (attack.elapsed < cs.startup && elapsed >= cs.startup) {
+    ctx.events.push({
+      type: 'shotFired',
+      kind: 'chargedShot',
+      attackId: attack.attackId,
+      origin: shotOrigin(p, ctx),
+      direction: directionFromYaw(p.yaw),
+      range: cs.range,
+      damage: cs.baseDamage + cs.bonusDamage * p.chargeRatio,
+      pierce: true,
+      chargeRatio: p.chargeRatio,
+    });
+  }
+  const r = moveOnGround(next.position, ZERO3, dt, playerCapsule(config), ctx.terrain, config);
+  next = { ...applyGround(next, r), velocity: ZERO3 };
+  if (r.ground.kind === 'none') {
+    ctx.events.push({ type: 'attackEnded', kind: 'chargedShot' });
+    return startFall({ ...next, attack: null }, ctx, false);
+  }
+  next = regen(next, ctx, true);
+  if (elapsed < cs.total) return next;
+  ctx.events.push({ type: 'attackEnded', kind: 'chargedShot' });
+  return enter({ ...next, attack: null }, 'idle');
+}
+
 function stepHit(p: PlayerState, ctx: Ctx): PlayerState {
   const { config, dt } = ctx;
   const stunRemaining = p.stunRemaining - dt;
@@ -804,6 +1112,14 @@ function dispatch(p: PlayerState, ctx: Ctx): PlayerState {
       return stepGroundAttack(p, ctx);
     case 'airAttack':
       return stepAirAttack(p, ctx);
+    case 'strongAttack':
+      return stepStrongAttack(p, ctx);
+    case 'shoot':
+      return stepShoot(p, ctx);
+    case 'charge':
+      return stepCharge(p, ctx);
+    case 'chargedShot':
+      return stepChargedShot(p, ctx);
     case 'hit':
       return stepHit(p, ctx);
     case 'dead':
@@ -831,7 +1147,7 @@ function applySprintHold(p: PlayerState, input: PlayerStepInput): PlayerState {
 /** ヒットストップ中(dt = 0)は入力の受付(バッファ)だけを行う。 */
 function stepFrozen(p: PlayerState, input: PlayerStepInput): PlayerState {
   const held = applySprintHold(p, input);
-  if (held.name === 'attack' && held.attack && input.attack) {
+  if ((held.name === 'attack' || held.name === 'shoot') && held.attack && input.attack) {
     return { ...held, attack: { ...held.attack, bufferedAttack: true } };
   }
   return held;

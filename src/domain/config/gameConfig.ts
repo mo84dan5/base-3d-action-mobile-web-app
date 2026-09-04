@@ -101,6 +101,9 @@ export interface ActionConfig {
   readonly energyMax: number;
   readonly energyPerNormalHit: number;
   readonly energyPerSkillHit: number;
+  readonly energyPerStrongAttackHit: number;
+  readonly energyPerShootHit: number;
+  readonly energyPerChargedShotHit: number;
   readonly buttonPressVibrationMs: number;
   readonly playerHitVibrationMs: number;
   /** 看板のインタラクト範囲(m) */
@@ -139,6 +142,33 @@ export interface CombatConfig {
   readonly skill: AttackTiming & { readonly radius: number; readonly knockbackSpeed: number };
   readonly burst: AttackTiming & { readonly radius: number };
   readonly normalAttackKnockbackSpeed: number;
+  /** 接近強攻撃(格闘、長押し。F04) */
+  readonly strongAttack: AttackTiming & {
+    readonly staminaCost: number;
+    readonly targetHalfAngleDeg: number;
+    readonly targetRange: number;
+    readonly lungeSpeed: number;
+    readonly lungeMaxTime: number;
+    readonly lungeStopDistance: number;
+    readonly radius: number;
+    readonly knockbackSpeed: number;
+  };
+  /** 射撃(銃撃、押下。F04) */
+  readonly shoot: AttackTiming & {
+    readonly range: number;
+    readonly targetHalfAngleDeg: number;
+    readonly knockbackSpeed: number;
+  };
+  /** タメ打ち(銃撃、長押し。F04) */
+  readonly chargedShot: AttackTiming & {
+    readonly maxChargeTime: number;
+    readonly baseDamage: number;
+    readonly bonusDamage: number;
+    readonly range: number;
+    readonly knockbackSpeed: number;
+    /** タメ中の移動速度上限(m/s) */
+    readonly chargeMoveSpeed: number;
+  };
   /** 開始カウントダウン: 3, 2, 1 各 1 秒 + START 0.5 秒 */
   readonly countdownSeconds: number;
   readonly countdownStartLabelSeconds: number;
@@ -239,6 +269,12 @@ export interface HitReactionConfig {
     readonly skill: HitstopSteps;
     readonly burst: HitstopSteps;
     readonly enemyAttack: HitstopSteps;
+    readonly strongAttack: HitstopSteps;
+    readonly shoot: HitstopSteps;
+    /** タメ 0.5 秒未満 */
+    readonly chargedShotWeak: HitstopSteps;
+    /** タメ 0.5 秒以上 */
+    readonly chargedShotStrong: HitstopSteps;
   };
   /** 1 回の攻撃で攻撃側に掛かる合計の上限(ステップ) */
   readonly attackerHitstopCapSteps: number;
@@ -252,6 +288,14 @@ export interface HitReactionConfig {
     readonly enemyDefeat: ShakeSpec;
     readonly playerDefeat: ShakeSpec;
     readonly landing: ShakeSpec;
+    readonly strongAttack: ShakeSpec;
+    /** タメ打ち発射: 振幅 base + bonus × タメ率、持続 steps(最大タメで maxSteps) */
+    readonly chargedShot: {
+      readonly base: number;
+      readonly bonus: number;
+      readonly steps: number;
+      readonly maxSteps: number;
+    };
   };
   readonly shakeMaxAmplitude: number;
   readonly shakeMaxSteps: number;
@@ -345,6 +389,9 @@ export const defaultConfig: GameConfig = {
     energyMax: 100,
     energyPerNormalHit: 5,
     energyPerSkillHit: 15,
+    energyPerStrongAttackHit: 10,
+    energyPerShootHit: 3,
+    energyPerChargedShotHit: 10,
     buttonPressVibrationMs: 10,
     playerHitVibrationMs: 20,
     signboardRange: 2.0,
@@ -370,6 +417,41 @@ export const defaultConfig: GameConfig = {
     skill: { damage: 30, startup: 0.2, active: 0.1, total: 0.7, radius: 2.5, knockbackSpeed: 5.0 },
     burst: { damage: 80, startup: 0.3, active: 0.2, total: 1.2, radius: 4.0 },
     normalAttackKnockbackSpeed: 1.7,
+    strongAttack: {
+      damage: 35,
+      startup: 0.1,
+      active: 0.15,
+      total: 0.7,
+      staminaCost: 25,
+      targetHalfAngleDeg: 45,
+      targetRange: 6.0,
+      lungeSpeed: 9.0,
+      lungeMaxTime: 0.35,
+      lungeStopDistance: 1.0,
+      radius: 1.5,
+      knockbackSpeed: 5.0,
+    },
+    shoot: {
+      damage: 8,
+      startup: 0.05,
+      active: 0,
+      total: 0.25,
+      range: 12.0,
+      targetHalfAngleDeg: 15,
+      knockbackSpeed: 1.0,
+    },
+    chargedShot: {
+      damage: 20,
+      startup: 0.05,
+      active: 0,
+      total: 0.5,
+      maxChargeTime: 1.0,
+      baseDamage: 20,
+      bonusDamage: 40,
+      range: 16.0,
+      knockbackSpeed: 3.0,
+      chargeMoveSpeed: 1.8,
+    },
     countdownSeconds: 3,
     countdownStartLabelSeconds: 0.5,
     resultDelay: 1.5,
@@ -445,6 +527,10 @@ export const defaultConfig: GameConfig = {
       skill: { attacker: 4, victim: 4 },
       burst: { attacker: 8, victim: 8 },
       enemyAttack: { attacker: 3, victim: 4 },
+      strongAttack: { attacker: 6, victim: 6 },
+      shoot: { attacker: 2, victim: 2 },
+      chargedShotWeak: { attacker: 4, victim: 4 },
+      chargedShotStrong: { attacker: 6, victim: 6 },
     },
     attackerHitstopCapSteps: 10,
     flashSteps: 6,
@@ -457,6 +543,8 @@ export const defaultConfig: GameConfig = {
       enemyDefeat: { amplitude: 0.06, steps: 9 },
       playerDefeat: { amplitude: 0.15, steps: 18 },
       landing: { amplitude: 0.04, steps: 6 },
+      strongAttack: { amplitude: 0.08, steps: 9 },
+      chargedShot: { base: 0.04, bonus: 0.08, steps: 9, maxSteps: 12 },
     },
     shakeMaxAmplitude: 0.2,
     shakeMaxSteps: 30,

@@ -4,6 +4,7 @@ import type { EffectPort } from '../../application/ports';
 import type { ViewState } from '../../application/viewState';
 import type { GameConfig } from '../../domain/config/gameConfig';
 import type { AttackKind } from '../../domain/hitReaction/hitTables';
+import type { Vec3 } from '../../domain/math/vec3';
 import { qualityPreset, type Quality, type QualityPreset } from '../../domain/settings/settings';
 
 // VFX プレイヤー(デザインディレクション エフェクト)。ローポリ・フラットシェード、ポリゴンの形だけで作る。
@@ -197,6 +198,8 @@ export class VfxPlayer implements EffectPort {
   private afterimageQueue: { position: THREE.Vector3; yaw: number; delay: number }[] = [];
   private readonly telegraphs: THREE.Mesh[] = [];
   private readonly interactRing: THREE.Mesh;
+  private readonly chargeRing: THREE.Mesh;
+  private chargeFullTime = 0;
   private readonly enemyAttacking = new Map<number, boolean>();
   private dim = 0;
   private windTimer = 0;
@@ -244,6 +247,15 @@ export class VfxPlayer implements EffectPort {
     this.interactRing.visible = false;
     this.interactRing.name = 'vfx_interact_ring';
     this.group.add(this.interactRing);
+    // タメのチャージリング(デザインディレクション: 足元、半径 1.5 → 0.6、シアン → 白)
+    this.chargeRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.94, 1.0, 32),
+      this.material('uiCyan').clone(),
+    );
+    this.chargeRing.rotation.x = -Math.PI / 2;
+    this.chargeRing.visible = false;
+    this.chargeRing.name = 'vfx_charge_ring';
+    this.group.add(this.chargeRing);
     for (let i = 0; i < 2; i++) {
       const m = new THREE.Mesh(this.playerGeometry, this.material('grey', false, 0.5));
       m.visible = false;
@@ -337,6 +349,25 @@ export class VfxPlayer implements EffectPort {
       case 'hitSpark':
         this.spark(event.attack, event.position);
         break;
+      case 'tracer':
+        this.tracer(event.from, event.to, event.charged, event.chargeRatio);
+        break;
+      case 'muzzleFlash':
+        this.muzzleFlash(event.position, event.yaw);
+        break;
+      case 'lunge':
+        this.afterimageQueue.push({
+          position: new THREE.Vector3(event.position.x, event.position.y, event.position.z),
+          yaw: event.yaw,
+          delay: 0,
+        });
+        this.afterimageQueue.push({
+          position: new THREE.Vector3(event.position.x, event.position.y, event.position.z),
+          yaw: event.yaw,
+          delay: 0.05,
+        });
+        this.dustPuff(event.position, 3, 0.15);
+        break;
       case 'skillTelegraph':
         this.shrinkRing(
           event.position,
@@ -400,14 +431,15 @@ export class VfxPlayer implements EffectPort {
     position: { x: number; y: number; z: number },
     yaw: number,
   ): void {
-    const outer = kind === 'normal3' ? 1.6 : kind === 'enemyAttack' ? 1.0 : 1.4;
+    const outer =
+      kind === 'normal3' ? 1.6 : kind === 'enemyAttack' ? 1.0 : kind === 'strongAttack' ? 1.8 : 1.4;
     const color: ColorName = kind === 'enemyAttack' ? 'red' : 'white';
     const roll =
       kind === 'normal1'
         ? Math.PI / 4
         : kind === 'normal2'
           ? -Math.PI / 4
-          : kind === 'airAttack'
+          : kind === 'airAttack' || kind === 'strongAttack'
             ? Math.PI / 2
             : 0;
     const mesh = this.play(
@@ -430,7 +462,9 @@ export class VfxPlayer implements EffectPort {
   }
 
   private spark(kind: AttackKind, position: { x: number; y: number; z: number }): void {
-    const count = this.particleCount(kind === 'normal3' ? 6 : 4);
+    const count = this.particleCount(
+      kind === 'normal3' || kind === 'strongAttack' || kind === 'chargedShot' ? 6 : 4,
+    );
     for (let i = 0; i < count; i++) {
       const dir = new THREE.Vector3(
         Math.random() - 0.5,
@@ -449,6 +483,71 @@ export class VfxPlayer implements EffectPort {
       });
     }
     if (kind === 'normal3') this.ring(position, 'cyan', 1.0);
+    if (kind === 'strongAttack') this.ring(position, 'cyan', 1.5);
+  }
+
+  /** 弾道線: 射線に沿った細長い板。射撃は白で 3 ステップ、タメ打ちは幅 0.12 m の淡シアン + 加算の白い芯で 12 ステップ。 */
+  private tracer(from: Vec3, to: Vec3, charged: boolean, chargeRatio: number): void {
+    const a = new THREE.Vector3(from.x, from.y, from.z);
+    const b = new THREE.Vector3(to.x, to.y, to.z);
+    const length = a.distanceTo(b);
+    if (length < 0.05) return;
+    const mid = a.clone().add(b).multiplyScalar(0.5);
+    const dir = b.clone().sub(a).normalize();
+    const place = (m: THREE.Mesh, width: number) => {
+      m.position.copy(mid);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      m.scale.set(width, length, 1);
+    };
+    const life = charged ? 12 / 60 : 3 / 60;
+    const body = this.play(
+      charged ? 'vfx_charged_shot_tracer' : 'vfx_shoot_tracer',
+      () =>
+        new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.material(charged ? 'cyan' : 'white')),
+      life,
+      (t, m) => {
+        (m.material as THREE.MeshBasicMaterial).opacity = 1 - t;
+      },
+    );
+    place(body, charged ? 0.12 : 0.03);
+    body.material = this.material(charged ? 'cyan' : 'white').clone();
+    if (!charged) return;
+    const core = this.play(
+      'vfx_charged_shot_core',
+      () => new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.material('white', true)),
+      life,
+      (t, m) => {
+        (m.material as THREE.MeshBasicMaterial).opacity = 1 - t;
+      },
+    );
+    place(core, 0.04 + 0.02 * chargeRatio);
+    core.material = this.material('white', true).clone();
+  }
+
+  /** マズルフラッシュ: 銃口(プレイヤー中心の高さ・正面 0.5 m)から放射する 4 本の三角形。0.1 秒。 */
+  private muzzleFlash(position: Vec3, yaw: number): void {
+    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    const muzzle = new THREE.Vector3(position.x, position.y, position.z).addScaledVector(
+      forward,
+      0.5,
+    );
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const spread = new THREE.Vector3(Math.cos(a), Math.sin(a), 0).applyAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        yaw,
+      );
+      this.sparks.spawn({
+        age: 0,
+        life: 0.1,
+        position: muzzle.clone(),
+        velocity: spread.clone().multiplyScalar(0.8),
+        scale: 0.5,
+        gravity: false,
+        groundY: -Infinity,
+        rotation: new THREE.Euler(0, Math.atan2(spread.x, spread.z), Math.asin(spread.y)),
+      });
+    }
   }
 
   private ring(
@@ -631,6 +730,7 @@ export class VfxPlayer implements EffectPort {
       if (fan) fan.visible = false;
     }
     const p = view.player;
+    this.syncChargeRing(p);
     const hSpeed = Math.hypot(p.velocity.x, p.velocity.z);
     if (p.state === 'glide' && hSpeed >= 2 && this.windTimer <= 0) {
       this.windTimer = 0.12;
@@ -642,6 +742,29 @@ export class VfxPlayer implements EffectPort {
       this.interactRing.position.set(target.x, target.y, target.z);
       this.interactRing.position.y += 0.05 + 0.15 * (0.5 + 0.5 * Math.sin(this.time * 3));
     }
+  }
+
+  /** チャージリング: 半径 1.5 → 0.6 m に縮み、満タンで白へ。満タン後は 1 秒周期で明滅(3 Hz 未満)。 */
+  private syncChargeRing(p: ViewState['player']): void {
+    const ratio = p.chargeRatio;
+    this.chargeRing.visible = ratio > 0;
+    if (ratio <= 0) {
+      this.chargeFullTime = 0;
+      return;
+    }
+    const radius = 1.5 + (0.6 - 1.5) * ratio;
+    this.chargeRing.position.set(p.position.x, p.position.y + 0.05, p.position.z);
+    this.chargeRing.scale.setScalar(radius);
+    const material = this.chargeRing.material as THREE.MeshBasicMaterial;
+    if (ratio >= 1) {
+      this.chargeFullTime += 1 / 60;
+      const blink = 0.5 + 0.5 * Math.sin(this.chargeFullTime * Math.PI * 2);
+      material.color.set(COLORS.white);
+      material.opacity = 0.7 + 0.3 * blink;
+      return;
+    }
+    material.color.set(COLORS.uiCyan).lerp(new THREE.Color(COLORS.white), ratio * 0.5);
+    material.opacity = 0.9;
   }
 
   private spawnWindLines(

@@ -25,6 +25,8 @@ export interface PlayerView {
   readonly staminaLow: boolean;
   /** 倒れモーションの進行 0〜1(Dead のみ) */
   readonly defeatProgress: number;
+  /** タメ率 0〜1(Charge 中のみ。それ以外は 0) */
+  readonly chargeRatio: number;
 }
 
 export interface EnemyView {
@@ -63,6 +65,8 @@ export interface HudView {
   readonly skillCooldownLabel: string;
   readonly energyRatio: number;
   readonly energyFull: boolean;
+  /** 銃撃のタメ率(攻撃ボタンのリング表示用) */
+  readonly chargeRatio: number;
   readonly indicator: 'climb' | 'glide' | null;
   readonly interactTargetName: string | null;
   readonly interactTargetPosition: Vec3 | null;

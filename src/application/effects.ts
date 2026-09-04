@@ -9,6 +9,15 @@ export type EffectEvent =
       readonly position: Vec3;
       readonly yaw: number;
     }
+  | {
+      readonly kind: 'tracer';
+      readonly from: Vec3;
+      readonly to: Vec3;
+      readonly charged: boolean;
+      readonly chargeRatio: number;
+    }
+  | { readonly kind: 'muzzleFlash'; readonly position: Vec3; readonly yaw: number }
+  | { readonly kind: 'lunge'; readonly position: Vec3; readonly yaw: number }
   | { readonly kind: 'skillTelegraph'; readonly position: Vec3 }
   | { readonly kind: 'skillBurst'; readonly position: Vec3 }
   | { readonly kind: 'burstActivate'; readonly position: Vec3 }

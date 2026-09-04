@@ -2,6 +2,7 @@ import {
   SENSITIVITY_MAX,
   SENSITIVITY_MIN,
   SENSITIVITY_STEP,
+  type AttackStyle,
   type Quality,
   type Settings,
   type StickMode,
@@ -70,6 +71,15 @@ export class PauseMenu {
           ['fixed', '固定'],
         ],
         initial.stickMode,
+      ),
+      this.segmentRow<AttackStyle>(
+        '攻撃スタイル',
+        'attackStyle',
+        [
+          ['melee', '格闘'],
+          ['gun', '銃撃'],
+        ],
+        initial.attackStyle,
       ),
       this.segmentRow<Quality>(
         '表示品質',

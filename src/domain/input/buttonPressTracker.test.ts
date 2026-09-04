@@ -64,8 +64,8 @@ describe('ButtonPressTracker 長押し(F03 200 ms 境界)', () => {
     expect(t.flush(0.2)).toEqual([{ type: 'SkillPressed' }, { type: 'SkillHoldStart' }]);
     expect(t.release()).toEqual([{ type: 'SkillHoldEnd' }]);
   });
-  it('ジャンプ・攻撃は 1 秒押しても長押しイベントを出さない', () => {
-    for (const kind of ['jump', 'attack', 'burst', 'interact', 'pause'] as const) {
+  it('ジャンプ・バースト・インタラクト・ポーズは 1 秒押しても長押しイベントを出さない', () => {
+    for (const kind of ['jump', 'burst', 'interact', 'pause'] as const) {
       const t = tracker(kind);
       t.press(0);
       t.flush(0);
@@ -138,5 +138,18 @@ describe('ButtonInputSet', () => {
     expect(set.press('burst', 0).accepted).toBe(false);
     set.lockFor('interact', 0.15, 0);
     expect(set.press('interact', 0.1).accepted).toBe(false);
+  });
+});
+
+describe('攻撃ボタンの長押し(F03 追記)', () => {
+  it('200 ms で AttackHoldStart、離すと AttackHoldEnd、キャンセルでは HoldEnd のみで押下は破棄', () => {
+    const t = new ButtonPressTracker('attack', 0.2);
+    t.press(0);
+    expect(t.flush(0.1).map((c) => c.type)).toEqual(['AttackPressed']);
+    expect(t.flush(0.2).map((c) => c.type)).toEqual(['AttackHoldStart']);
+    expect(t.release().map((c) => c.type)).toEqual(['AttackHoldEnd']);
+    t.press(1);
+    expect(t.flush(1.25).map((c) => c.type)).toEqual(['AttackPressed', 'AttackHoldStart']);
+    expect(t.cancel().map((c) => c.type)).toEqual(['AttackHoldEnd']);
   });
 });

@@ -1,7 +1,12 @@
 import type { GameConfig, HitstopSteps, ShakeSpec } from '../config/gameConfig';
 import { scale, type Vec3 } from '../math/vec3';
 import type { HitCategory } from '../player/playerState';
-import { hitstopFor, shakeForHit, type AttackKind } from '../hitReaction/hitTables';
+import {
+  hitstopFor,
+  hitstopForChargedShot,
+  shakeForHit,
+  type AttackKind,
+} from '../hitReaction/hitTables';
 import type { FlashColor } from '../hitReaction/hitFlash';
 import { horizontalKnockbackDirection } from './hitGeometry';
 
@@ -22,6 +27,8 @@ export interface HitRequest {
   readonly victimInvincible: boolean;
   /** 徘徊型の硬直を今回適用できるか(1.0 秒に 1 回。呼び出し側が判定) */
   readonly enemyStunAvailable?: boolean;
+  /** タメ打ちのタメ率 0〜1(ヒットストップの長さに使う) */
+  readonly chargeRatio?: number;
 }
 
 export type HitStateTransition = 'none' | 'toFall' | 'hitState';
@@ -68,6 +75,12 @@ function knockbackSpeedFor(kind: AttackKind, config: GameConfig): number {
   switch (kind) {
     case 'skill':
       return config.combat.skill.knockbackSpeed;
+    case 'strongAttack':
+      return config.combat.strongAttack.knockbackSpeed;
+    case 'shoot':
+      return config.combat.shoot.knockbackSpeed;
+    case 'chargedShot':
+      return config.combat.chargedShot.knockbackSpeed;
     case 'burst':
       return 0;
     case 'enemyAttack':
@@ -86,6 +99,12 @@ function energyGainFor(kind: AttackKind, config: GameConfig): number {
       return config.action.energyPerNormalHit;
     case 'skill':
       return config.action.energyPerSkillHit;
+    case 'strongAttack':
+      return config.action.energyPerStrongAttackHit;
+    case 'shoot':
+      return config.action.energyPerShootHit;
+    case 'chargedShot':
+      return config.action.energyPerChargedShotHit;
     default:
       return 0;
   }
@@ -168,7 +187,10 @@ export function resolveHit(req: HitRequest, config: GameConfig): HitResolution |
   const stunSeconds = victimIsPlayer ? config.combat.playerHitStun : config.enemy.hitStun;
   return {
     damage: req.damage,
-    hitstop: hitstopFor(req.attackKind, config.hitReaction),
+    hitstop:
+      req.attackKind === 'chargedShot'
+        ? hitstopForChargedShot(req.chargeRatio ?? 0, config.hitReaction)
+        : hitstopFor(req.attackKind, config.hitReaction),
     flash: victimIsPlayer ? 'red' : 'white',
     applyStun: policy.applyStun,
     stunSeconds: policy.applyStun ? stunSeconds : 0,

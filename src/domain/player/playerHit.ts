@@ -66,7 +66,9 @@ export function releasePendingPlayerHit(player: PlayerState): {
     knockbackRemaining: pending.knockback ? pending.knockbackDecay : player.knockbackRemaining,
   };
   switch (pending.transition) {
-    case 'hitState':
+    case 'hitState': {
+      const events: PlayerEvent[] = [{ type: 'stunned' }];
+      if (player.name === 'charge') events.push({ type: 'chargeCancelled' });
       return {
         player: {
           ...base,
@@ -75,12 +77,15 @@ export function releasePendingPlayerHit(player: PlayerState): {
           stunRemaining: pending.stunSeconds,
           velocity: ZERO3,
           attack: null,
+          strong: null,
+          chargeTime: 0,
           climb: null,
           lastAttackStage: 0,
           comboWindowRemaining: 0,
         },
-        events: [{ type: 'stunned' }],
+        events,
       };
+    }
     case 'toFall': {
       const wasClimb = player.name === 'climb';
       const wasGlide = player.name === 'glide';

@@ -568,8 +568,18 @@ button {
   --ring-color: var(--cyan);
 }
 
-.action-btn.burst.full {
+.action-btn.burst.full,
+.action-btn.attack.full {
   animation: burst-glow 1s ease-in-out infinite alternate;
+}
+
+.action-btn.attack .ring {
+  display: none;
+  --ring-color: var(--cyan);
+}
+
+.action-btn.attack.charging .ring {
+  display: block;
 }
 
 @keyframes burst-glow {

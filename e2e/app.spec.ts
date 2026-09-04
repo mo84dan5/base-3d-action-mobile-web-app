@@ -498,3 +498,124 @@ test.describe('残り項目の裏付け(S02 / F09 / F10)', () => {
     if (box) expect(box.y).toBeGreaterThan(844 / 2);
   });
 });
+
+test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
+  async function startWithStyle(page: Page, style: 'melee' | 'gun'): Promise<void> {
+    await page.addInitScript((s) => {
+      localStorage.setItem('b3d.settings.v1', JSON.stringify({ version: 1, attackStyle: s }));
+    }, style);
+    await page.goto('./?debug=1');
+    const start = page.getByTestId('start');
+    await expect(start).toBeEnabled({ timeout: 30_000 });
+    await start.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
+    await page.waitForFunction(() => window.__b3dDebug?.view()?.hud.phase === 'playing', null, {
+      timeout: 20_000,
+    });
+  }
+  const enemyHp = (page: Page, id: number) =>
+    page.evaluate((i) => window.__b3dDebug?.view()?.enemies.find((x) => x.id === i)?.hp ?? -1, id);
+  const approach = async (page: Page, id: number, within: number) => {
+    await page.keyboard.down('KeyW');
+    await page.waitForFunction(
+      ([i, d]) => {
+        const v = window.__b3dDebug?.view();
+        const e = v?.enemies.find((x) => x.id === i);
+        if (!v || !e) return false;
+        return (
+          Math.hypot(e.position.x - v.player.position.x, e.position.z - v.player.position.z) < d
+        );
+      },
+      [id, within] as const,
+      { timeout: 30_000 },
+    );
+    await page.keyboard.up('KeyW');
+  };
+  const waitWorld = (page: Page, seconds: number) =>
+    page
+      .evaluate((s) => window.__b3dDebug?.view()?.worldTime ?? 0)
+      .then((t0) =>
+        page.waitForFunction((t) => (window.__b3dDebug?.view()?.worldTime ?? 0) > t, t0 + seconds, {
+          timeout: 20_000,
+        }),
+      );
+
+  test('銃撃: 攻撃ボタンで正面の徘徊型に 8 ダメージ、長押しで離すとタメ打ちで倒す', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await startWithStyle(page, 'gun');
+    await approach(page, 3, 9);
+    await page.waitForFunction(
+      () => window.__b3dDebug?.view()?.hud.buttons.attack.enabled === true,
+    );
+    await tap(page, 'btn-attack');
+    await waitWorld(page, 0.4);
+    expect(await enemyHp(page, 3)).toBe(52);
+    // 長押し: pointerdown → タメ(リング表示)→ 1.1 秒後に pointerup
+    const attack = page.getByTestId('btn-attack');
+    await attack.dispatchEvent('pointerdown', {
+      pointerType: 'touch',
+      isPrimary: true,
+      button: 0,
+      pointerId: 51,
+    });
+    await page.waitForFunction(() => (window.__b3dDebug?.view()?.hud.chargeRatio ?? 0) >= 1, null, {
+      timeout: 20_000,
+    });
+    await expect(attack).toHaveClass(/charging/);
+    await attack.dispatchEvent('pointerup', {
+      pointerType: 'touch',
+      isPrimary: true,
+      button: 0,
+      pointerId: 51,
+    });
+    await waitWorld(page, 0.6);
+    expect(await enemyHp(page, 3)).toBeLessThanOrEqual(0);
+  });
+
+  test('格闘: 攻撃ボタン長押しで接近強攻撃が出て 35 ダメージ、スタミナが 25 減る', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await startWithStyle(page, 'melee');
+    await approach(page, 3, 5);
+    await page.waitForFunction(
+      () => window.__b3dDebug?.view()?.hud.buttons.attack.enabled === true,
+    );
+    const staminaBefore = await page.evaluate(() => window.__b3dDebug?.view()?.player.stamina ?? 0);
+    const attack = page.getByTestId('btn-attack');
+    await attack.dispatchEvent('pointerdown', {
+      pointerType: 'touch',
+      isPrimary: true,
+      button: 0,
+      pointerId: 52,
+    });
+    await page.waitForFunction(
+      () => window.__b3dDebug?.view()?.player.state === 'strongAttack',
+      null,
+      {
+        timeout: 20_000,
+      },
+    );
+    const staminaAfter = await page.evaluate(() => window.__b3dDebug?.view()?.player.stamina ?? 0);
+    expect(staminaBefore - staminaAfter).toBeGreaterThanOrEqual(24);
+    await attack.dispatchEvent('pointerup', {
+      pointerType: 'touch',
+      isPrimary: true,
+      button: 0,
+      pointerId: 52,
+    });
+    await waitWorld(page, 1.5);
+    expect(await enemyHp(page, 3)).toBeLessThanOrEqual(25);
+  });
+
+  test('S03 の攻撃スタイル設定が保存される', async ({ page }) => {
+    await startGame(page);
+    await tap(page, 'pause');
+    const gun = page.getByTestId('setting-attackStyle').locator('button[data-value="gun"]');
+    await gun.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
+    await expect(gun).toHaveClass(/on/);
+    const stored = await page.evaluate(() => localStorage.getItem('b3d.settings.v1'));
+    expect(stored).toContain('"attackStyle":"gun"');
+  });
+});

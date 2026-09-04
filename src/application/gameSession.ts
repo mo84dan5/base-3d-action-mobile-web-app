@@ -20,6 +20,8 @@ import { resolveHit, type HitResolution } from '../domain/combat/damage';
 import {
   sphereCapsuleOverlap,
   closestPointOnCapsuleToSphere,
+  nearestTargetInCone,
+  rayCapsuleDistance,
   targetCorrectionYaw,
   type Capsule,
 } from '../domain/combat/hitGeometry';
@@ -73,7 +75,11 @@ import {
   tickFlash,
   type HitFlash,
 } from '../domain/hitReaction/hitFlash';
-import { shakeForEvent, type AttackKind } from '../domain/hitReaction/hitTables';
+import {
+  shakeForChargedShot,
+  shakeForEvent,
+  type AttackKind,
+} from '../domain/hitReaction/hitTables';
 import {
   createSignboard,
   findInteractTarget,
@@ -82,13 +88,18 @@ import {
   type Interactable,
   type InteractMessage,
 } from '../domain/interact/interactable';
-import { add, vec3, type Vec3 } from '../domain/math/vec3';
+import { add, scale, vec3, type Vec3 } from '../domain/math/vec3';
 import { createPlayer } from '../domain/player/playerFactory';
 import type { PlayerEvent } from '../domain/player/playerEvents';
 import { applyPlayerHit } from '../domain/player/playerHit';
 import { enemyCapsule, playerCapsule } from '../domain/player/playerPhysics';
 import { hitCategoryOf, isGroundLocomotion, type PlayerState } from '../domain/player/playerState';
-import { playerCenter, stepPlayer, type PlayerStepInput } from '../domain/player/playerStep';
+import {
+  cancelCharge,
+  playerCenter,
+  stepPlayer,
+  type PlayerStepInput,
+} from '../domain/player/playerStep';
 import type { Settings } from '../domain/settings/settings';
 import type { StageLayout } from '../domain/stage/stageLayout';
 import { isStaminaLow } from '../domain/stamina/stamina';
@@ -191,6 +202,9 @@ export class GameSession {
     this.stick = { x: 0, y: 0, magnitude: 0 };
     this.camera = cancelCameraInput(this.camera);
     if (this.player.sprintHeld) this.player = { ...this.player, sprintHeld: false };
+    const cancelled = cancelCharge(this.player);
+    this.player = cancelled.player;
+    for (const e of cancelled.events) this.handlePlayerEvent(e);
   }
 
   buttonStates(): ButtonStates {
@@ -217,7 +231,7 @@ export class GameSession {
     this.stick = input.stick;
     const gated = this.gateActions(input);
     this.tickWorldTimers(dt);
-    this.stepPlayer(gated, dt);
+    this.stepPlayer(gated, dt, settings);
     this.stepEnemies(dt);
     this.separate();
     this.stepInteract(gated);
@@ -272,9 +286,25 @@ export class GameSession {
     }
   }
 
-  private stepPlayer(input: FrameInput, dt: number): void {
+  private stepPlayer(input: FrameInput, dt: number, settings: Settings): void {
     const { config } = this;
     const entityDt = this.player.hitstopSteps > 0 ? 0 : dt;
+    const candidates = this.targetCandidates();
+    const sa = config.combat.strongAttack;
+    const strongTarget = nearestTargetInCone(
+      this.player.position,
+      this.player.yaw,
+      candidates,
+      sa.targetHalfAngleDeg,
+      sa.targetRange,
+    );
+    const shootTarget = nearestTargetInCone(
+      this.player.position,
+      this.player.yaw,
+      candidates,
+      config.combat.shoot.targetHalfAngleDeg,
+      config.combat.shoot.range,
+    );
     const stepInput: PlayerStepInput = {
       stick: input.stick,
       cameraYaw: this.camera.orbit.yaw,
@@ -285,7 +315,14 @@ export class GameSession {
       burst: input.burst,
       sprintHoldStart: input.sprintHoldStart,
       sprintHoldEnd: input.sprintHoldEnd,
+      attackHoldStart: input.attackHoldStart,
+      attackHoldEnd: input.attackHoldEnd,
       actionsAllowed: this.phase === 'playing',
+      attackStyle: settings.attackStyle,
+      strongTarget: strongTarget
+        ? { yaw: strongTarget.yaw, distance: strongTarget.distance }
+        : null,
+      shootTarget: shootTarget ? { yaw: shootTarget.yaw } : null,
     };
     const before = this.player;
     const r = stepPlayer(before, stepInput, this.deps.terrain, entityDt, config);
@@ -303,14 +340,18 @@ export class GameSession {
     }
   }
 
+  private targetCandidates() {
+    return this.enemies
+      .filter((e) => isTargetable(e.state))
+      .map((e) => ({ id: e.state.id, feet: e.state.position, hp: e.state.hp }));
+  }
+
   /** 攻撃開始時のターゲット補正(F04): 正面 ±30 度・3 m 以内の最も近い敵へ向く。 */
   private correctTarget(player: PlayerState): PlayerState {
     const yaw = targetCorrectionYaw(
       player.position,
       player.yaw,
-      this.enemies
-        .filter((e) => isTargetable(e.state))
-        .map((e) => ({ id: e.state.id, feet: e.state.position, hp: e.state.hp })),
+      this.targetCandidates(),
       this.config.combat,
     );
     return yaw === null ? player : { ...player, yaw };
@@ -344,6 +385,16 @@ export class GameSession {
           event.damage,
         );
         break;
+      case 'lungeStarted':
+        this.effect({ kind: 'lunge', position: p.position, yaw: p.yaw });
+        break;
+      case 'shotFired':
+        this.resolveShot(event);
+        break;
+      case 'chargeStarted':
+      case 'chargeCancelled':
+        this.effect({ kind: 'sound', name: event.type });
+        break;
       case 'climbAttached':
         this.effect({ kind: 'climbAttach', position: p.position, wallNormal: event.wallNormal });
         break;
@@ -373,7 +424,99 @@ export class GameSession {
       this.shake('burstActivate');
       return;
     }
+    if (kind === 'shoot' || kind === 'chargedShot') return;
     this.effect({ kind: 'attackSwing', attack: kind, position: p.position, yaw: p.yaw });
+  }
+
+  /** ヒットスキャン(射撃・タメ打ち): 地形までの距離を上限に、射線とカプセルの交差で敵にヒットさせる。 */
+  private resolveShot(shot: Extract<PlayerEvent, { type: 'shotFired' }>): void {
+    const { config } = this;
+    const terrainHit = this.deps.terrain.raycast(shot.origin, shot.direction, shot.range);
+    const maxDistance = terrainHit ? terrainHit.distance : shot.range;
+    const kind: AttackKind = shot.kind;
+    const hits = this.enemies
+      .filter((slot) => isTargetable(slot.state))
+      .map((slot) => {
+        const capsule: Capsule = {
+          feet: slot.state.position,
+          radius: config.enemy.capsuleRadius,
+          height: config.enemy.capsuleHeight,
+        };
+        return { slot, t: rayCapsuleDistance(shot.origin, shot.direction, maxDistance, capsule) };
+      })
+      .filter((h): h is { slot: EnemySlot; t: number } => h.t !== null)
+      .sort((a, b) => a.t - b.t);
+    const targets = shot.pierce ? hits : hits.slice(0, 1);
+    const endDistance = !shot.pierce && targets[0] ? targets[0].t : maxDistance;
+    const end = add(shot.origin, scale(shot.direction, endDistance));
+    this.effect({ kind: 'muzzleFlash', position: shot.origin, yaw: this.player.yaw });
+    this.effect({
+      kind: 'tracer',
+      from: shot.origin,
+      to: end,
+      charged: shot.pierce,
+      chargeRatio: shot.chargeRatio,
+    });
+    if (shot.kind === 'chargedShot') {
+      this.camera = requestCameraShake(
+        this.camera,
+        shakeForChargedShot(shot.chargeRatio, config.hitReaction),
+        this.deps.rng,
+        config,
+      );
+    }
+    if (this.attackerBudget?.attackId !== shot.attackId)
+      this.attackerBudget = createAttackerHitstopBudget(shot.attackId);
+    let attackerHitstop = 0;
+    let anyHit = false;
+    for (const { slot, t } of targets) {
+      const enemy = slot.state;
+      const resolution = resolveHit(
+        {
+          attackKind: kind,
+          attackId: shot.attackId,
+          attackerId: 'player',
+          victimId: enemy.id,
+          damage: Math.round(shot.damage),
+          attackerCenter: playerCenter(this.player, config),
+          victimCenter: enemyCenter(enemy, config.enemy),
+          victimYaw: enemy.yaw,
+          victimCategory: enemy.kind === 'dummy' ? 'enemyDummy' : 'enemyPatrol',
+          victimInvincible: this.countdownActive,
+          enemyStunAvailable: canEnemyBeStunned(enemy, this.worldTime, config.enemy),
+          chargeRatio: shot.chargeRatio,
+        },
+        config,
+      );
+      if (!resolution) continue;
+      anyHit = true;
+      slot.state = applyEnemyHit(enemy, resolution, this.worldTime, config);
+      attackerHitstop = Math.max(attackerHitstop, resolution.hitstop.attacker);
+      this.energy = gainEnergy(this.energy, resolution.energyGain);
+      this.spawnDamage(
+        enemy.id,
+        resolution.damage,
+        true,
+        add(enemy.position, vec3(0, config.enemy.capsuleHeight, 0)),
+      );
+      this.effect({
+        kind: 'hitSpark',
+        attack: kind,
+        position: add(shot.origin, scale(shot.direction, t)),
+        victim: 'enemy',
+      });
+      this.effect({ kind: 'sound', name: `hit_${kind}` });
+      if (isDefeated(slot.state)) this.onEnemyDefeated(slot.state);
+    }
+    if (!anyHit) return;
+    const applied = applyAttackerHitstop(
+      this.player.hitstopSteps,
+      attackerHitstop,
+      this.attackerBudget,
+      config.hitReaction,
+    );
+    this.attackerBudget = applied.budget;
+    this.player = { ...this.player, hitstopSteps: applied.steps };
   }
 
   private resolvePlayerAttack(
@@ -508,7 +651,11 @@ export class GameSession {
     };
     if (!sphereCapsuleOverlap(event.sphereCenter, event.radius, capsule)) return;
     slot.state = { ...slot.state, attackHitDone: true };
-    const category = hitCategoryOf(this.player.name, this.player.climb?.phase ?? null);
+    const category = hitCategoryOf(
+      this.player.name,
+      this.player.climb?.phase ?? null,
+      this.player.grounded,
+    );
     const resolution = resolveHit(
       {
         attackKind: 'enemyAttack',
@@ -658,6 +805,12 @@ export class GameSession {
     this.deps.effects.trigger(event);
   }
 
+  private chargeRatio(): number {
+    const p = this.player;
+    if (p.name !== 'charge') return 0;
+    return Math.min(1, p.chargeTime / this.config.combat.chargedShot.maxChargeTime);
+  }
+
   countdownLabel(): string | null {
     if (this.phase !== 'countdown') return null;
     const start = this.config.combat.countdownStartLabelSeconds;
@@ -684,6 +837,7 @@ export class GameSession {
       staminaLow: isStaminaLow(p.stamina, config.stamina),
       defeatProgress:
         p.name === 'dead' ? Math.min(1, p.stateTime / config.hitReaction.playerDefeatAnimTime) : 0,
+      chargeRatio: this.chargeRatio(),
     };
     const enemies: EnemyView[] = this.enemies.map(({ state: e }) => ({
       id: e.id,
@@ -718,6 +872,7 @@ export class GameSession {
       skillCooldownLabel: remainingSecondsLabel(this.skillCooldown),
       energyRatio: energyRatio(this.energy),
       energyFull: isEnergyFull(this.energy),
+      chargeRatio: this.chargeRatio(),
       indicator: p.name === 'climb' ? 'climb' : p.name === 'glide' ? 'glide' : null,
       interactTargetName: this.interactTarget()?.name ?? null,
       interactTargetPosition: this.interactTarget()?.position ?? null,

@@ -37,6 +37,7 @@ const PRESS_COMMAND: Readonly<Record<ButtonKind, InputCommand>> = {
 const HOLD_COMMANDS: Partial<
   Readonly<Record<ButtonKind, { readonly start: InputCommand; readonly end: InputCommand }>>
 > = {
+  attack: { start: { type: 'AttackHoldStart' }, end: { type: 'AttackHoldEnd' } },
   skill: { start: { type: 'SkillHoldStart' }, end: { type: 'SkillHoldEnd' } },
   sprint: { start: { type: 'SprintHoldStart' }, end: { type: 'SprintHoldEnd' } },
 };

@@ -7,6 +7,8 @@ export type InputCommand =
   | { readonly type: 'LookEnd' }
   | { readonly type: 'Zoom'; readonly delta: number }
   | { readonly type: 'AttackPressed' }
+  | { readonly type: 'AttackHoldStart' }
+  | { readonly type: 'AttackHoldEnd' }
   | { readonly type: 'SkillPressed' }
   | { readonly type: 'SkillHoldStart' }
   | { readonly type: 'SkillHoldEnd' }

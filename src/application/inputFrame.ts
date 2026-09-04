@@ -10,6 +10,8 @@ export interface FrameInput {
   readonly lookEnded: boolean;
   readonly zoom: number;
   readonly attack: boolean;
+  readonly attackHoldStart: boolean;
+  readonly attackHoldEnd: boolean;
   readonly skill: boolean;
   readonly skillHoldStart: boolean;
   readonly skillHoldEnd: boolean;
@@ -29,6 +31,8 @@ export const EMPTY_FRAME_INPUT: FrameInput = {
   lookEnded: false,
   zoom: 0,
   attack: false,
+  attackHoldStart: false,
+  attackHoldEnd: false,
   skill: false,
   skillHoldStart: false,
   skillHoldEnd: false,
@@ -69,6 +73,12 @@ export function accumulateFrameInput(
         break;
       case 'AttackPressed':
         f = { ...f, attack: true };
+        break;
+      case 'AttackHoldStart':
+        f = { ...f, attackHoldStart: true };
+        break;
+      case 'AttackHoldEnd':
+        f = { ...f, attackHoldEnd: true };
         break;
       case 'SkillPressed':
         f = { ...f, skill: true };

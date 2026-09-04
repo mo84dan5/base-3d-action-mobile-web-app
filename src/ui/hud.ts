@@ -120,7 +120,7 @@ export class Hud {
       this.button('skill', 'スキル', 'skill', true),
       this.button('burst', 'バースト', 'burst', true),
       this.button('jump', 'ジャンプ', 'jump', false),
-      this.button('attack', '攻撃', 'attack', false),
+      this.button('attack', '攻撃', 'attack', true),
       this.button('sprint', 'スプリント', 'sprint', false),
     );
     hudLayer.append(top, this.countdown, this.indicator, this.interactMessage, this.stick, group);
@@ -296,6 +296,13 @@ export class Hud {
         skill.el.classList.add('ready-pop');
       }
       this.lastSkillReady = ready;
+    }
+    const attackButton = this.buttons.get('attack');
+    if (attackButton?.ring) {
+      const ratio = view.hud.chargeRatio;
+      attackButton.ring.style.setProperty('--ratio', String(ratio));
+      attackButton.el.classList.toggle('charging', ratio > 0);
+      attackButton.el.classList.toggle('full', ratio >= 1);
     }
     const burst = this.buttons.get('burst');
     if (burst?.ring) {

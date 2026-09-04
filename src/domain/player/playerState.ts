@@ -19,6 +19,10 @@ export type PlayerStateName =
   | 'airAttack'
   | 'skill'
   | 'burst'
+  | 'strongAttack'
+  | 'shoot'
+  | 'charge'
+  | 'chargedShot'
   | 'hit'
   | 'dead';
 
@@ -48,6 +52,16 @@ export interface AttackData {
   readonly bufferedAttack: boolean;
 }
 
+/** 接近強攻撃(格闘、長押し)の踏み込み(F04) */
+export interface StrongAttackData {
+  readonly phase: 'lunge' | 'swing';
+  readonly lungeDir: Vec3;
+  readonly lungeTime: number;
+  readonly lungeTravelled: number;
+  /** 踏み込みの距離上限(目標の手前 1.0 m、最大 3.15 m) */
+  readonly lungeLimit: number;
+}
+
 export interface PlayerState {
   readonly name: PlayerStateName;
   /** 足元位置 */
@@ -73,6 +87,10 @@ export interface PlayerState {
   /** 次段の受付猶予の残り秒(全体時間の終了から 0.8 秒) */
   readonly comboWindowRemaining: number;
   readonly attack: AttackData | null;
+  readonly strong: StrongAttackData | null;
+  /** タメ時間(秒。Charge 中)/ タメ率(ChargedShot 中は発射時の値) */
+  readonly chargeTime: number;
+  readonly chargeRatio: number;
   readonly climb: ClimbData | null;
   /** 滑空の経過秒(鉛直速度の補間用) */
   readonly glideTime: number;
@@ -111,8 +129,14 @@ export interface PendingPlayerHit {
 export type HitCategory =
   'grounded' | 'burst' | 'airborne' | 'climb' | 'glide' | 'invulnerableAnim' | 'dead';
 
-export function hitCategoryOf(name: PlayerStateName, climbPhase: ClimbPhase | null): HitCategory {
+export function hitCategoryOf(
+  name: PlayerStateName,
+  climbPhase: ClimbPhase | null,
+  grounded = true,
+): HitCategory {
   switch (name) {
+    case 'shoot':
+      return grounded ? 'grounded' : 'airborne';
     case 'burst':
       return 'burst';
     case 'jump':

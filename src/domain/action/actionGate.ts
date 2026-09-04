@@ -32,7 +32,12 @@ const AIRBORNE: readonly PlayerStateName[] = ['jump', 'fall'];
 /** 通常攻撃: 接地移動中(地上攻撃)/ Jump・Fall(空中攻撃)。カウントダウン中は無効。 */
 export function attackEnabled(ctx: ActionGateContext): boolean {
   if (ctx.countdownActive) return false;
-  return isGroundLocomotion(ctx.playerState) || AIRBORNE.includes(ctx.playerState);
+  return (
+    isGroundLocomotion(ctx.playerState) ||
+    AIRBORNE.includes(ctx.playerState) ||
+    ctx.playerState === 'shoot' ||
+    ctx.playerState === 'charge'
+  );
 }
 
 /** スキル: クールダウン中でなく接地移動中。 */

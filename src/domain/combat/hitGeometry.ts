@@ -99,6 +99,70 @@ export function targetCorrectionYaw(
   return best === null ? null : best.yaw;
 }
 
+export interface ConeTarget {
+  readonly id: number;
+  readonly yaw: number;
+  /** 水平距離(m) */
+  readonly distance: number;
+}
+
+/** 正面 ±halfAngleDeg・range m 以内で最も近い敵(HP 0 は除外)。接近強攻撃・射撃のターゲット補正に使う。 */
+export function nearestTargetInCone(
+  playerFeet: Vec3,
+  playerYaw: number,
+  enemies: readonly TargetCandidate[],
+  halfAngleDeg: number,
+  range: number,
+): ConeTarget | null {
+  const halfAngle = degToRad(halfAngleDeg);
+  let best: ConeTarget | null = null;
+  for (const enemy of enemies) {
+    if (enemy.hp <= 0) continue;
+    const toEnemy = horizontal(sub(enemy.feet, playerFeet));
+    const dist = Math.hypot(toEnemy.x, toEnemy.z);
+    if (dist === 0 || dist > range) continue;
+    const yaw = yawFromDirection(toEnemy);
+    if (Math.abs(wrapAngle(yaw - playerYaw)) > halfAngle) continue;
+    if (best === null || dist < best.distance) best = { id: enemy.id, yaw, distance: dist };
+  }
+  return best;
+}
+
+/**
+ * レイ(原点 origin、単位方向 dir、長さ maxDistance)とカプセルの交差距離。交差しなければ null。
+ * レイ上の点からカプセル内部の線分への距離が半径以下になる最小の t を、粗い探索の後に二分で求める(ヒットスキャン用)。
+ */
+export function rayCapsuleDistance(
+  origin: Vec3,
+  dir: Vec3,
+  maxDistance: number,
+  capsule: Capsule,
+): number | null {
+  const { a, b } = capsuleSegment(capsule);
+  const distanceAt = (t: number): number => {
+    const p = add(origin, scale(dir, t));
+    return distance(closestPointOnSegment(p, a, b), p);
+  };
+  const steps = 64;
+  let hitT: number | null = null;
+  for (let i = 0; i <= steps; i++) {
+    const t = (maxDistance * i) / steps;
+    if (distanceAt(t) <= capsule.radius) {
+      hitT = t;
+      break;
+    }
+  }
+  if (hitT === null) return null;
+  let lo = Math.max(0, hitT - maxDistance / steps);
+  let hi = hitT;
+  for (let i = 0; i < 12; i++) {
+    const mid = (lo + hi) / 2;
+    if (distanceAt(mid) <= capsule.radius) hi = mid;
+    else lo = mid;
+  }
+  return hi;
+}
+
 /** ノックバック方向: 攻撃側中心 → 被弾側中心の水平単位ベクトル。ゼロなら被弾側の背面方向。 */
 export function horizontalKnockbackDirection(
   attackerCenter: Vec3,

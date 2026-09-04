@@ -45,6 +45,7 @@ describe('parseSettings(F06 読み込み)', () => {
       invertCameraY: true,
       invertCameraX: true,
       stickMode: 'fixed' as const,
+      attackStyle: 'gun' as const,
       quality: 'high' as const,
       showFps: true,
     };
@@ -138,5 +139,22 @@ describe('qualityPreset(F06 表示品質プリセット)', () => {
     expect(preset.pixelRatioScale).toBe('device');
     expect(preset.shadowMapSize).toBe(2048);
     expect(preset.vfxMeshLimit).toBe(400);
+  });
+});
+
+describe('attackStyle(F06)', () => {
+  it('キーが無い旧データでは格闘(melee)、"gun" は銃撃、不正な値は格闘', () => {
+    expect(parseSettings(JSON.stringify({ version: 1 })).attackStyle).toBe('melee');
+    expect(parseSettings(JSON.stringify({ version: 1, attackStyle: 'gun' })).attackStyle).toBe(
+      'gun',
+    );
+    expect(parseSettings(JSON.stringify({ version: 1, attackStyle: 'laser' })).attackStyle).toBe(
+      'melee',
+    );
+  });
+  it('直列化に attackStyle が含まれる', () => {
+    expect(serializeSettings({ ...defaultSettings, attackStyle: 'gun' })).toContain(
+      '"attackStyle":"gun"',
+    );
   });
 });

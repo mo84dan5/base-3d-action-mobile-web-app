@@ -18,6 +18,20 @@ export type PlayerEvent =
       readonly damage: number;
     }
   | { readonly type: 'attackEnded'; readonly kind: AttackKind }
+  | { readonly type: 'lungeStarted'; readonly direction: Vec3 }
+  | {
+      readonly type: 'shotFired';
+      readonly kind: 'shoot' | 'chargedShot';
+      readonly attackId: number;
+      readonly origin: Vec3;
+      readonly direction: Vec3;
+      readonly range: number;
+      readonly damage: number;
+      readonly pierce: boolean;
+      readonly chargeRatio: number;
+    }
+  | { readonly type: 'chargeStarted' }
+  | { readonly type: 'chargeCancelled' }
   | { readonly type: 'climbAttached'; readonly wallNormal: Vec3 }
   | { readonly type: 'cliffJumped' }
   | { readonly type: 'mantled' }
