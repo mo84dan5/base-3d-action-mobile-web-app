@@ -532,7 +532,7 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
   };
   const waitWorld = (page: Page, seconds: number) =>
     page
-      .evaluate((s) => window.__b3dDebug?.view()?.worldTime ?? 0)
+      .evaluate(() => window.__b3dDebug?.view()?.worldTime ?? 0)
       .then((t0) =>
         page.waitForFunction((t) => (window.__b3dDebug?.view()?.worldTime ?? 0) > t, t0 + seconds, {
           timeout: 20_000,
