@@ -183,3 +183,28 @@ describe('タメ打ち(銃撃・長押し。F04)', () => {
     expect(s.player.name).toBe('charge');
   });
 });
+
+describe('ヒットストップ中の長押し入力(F10 入力の受付)', () => {
+  it('ヒットストップ中(dt = 0)に届いた AttackHoldStart は停止が明けたステップで効き、タメが始まる', () => {
+    const s = new Sim();
+    s.step(gun({ attack: true }));
+    s.player = { ...s.player, hitstopSteps: 2 };
+    s.step(gun({ attackHoldStart: true }), 0);
+    expect(s.player.name).toBe('shoot');
+    expect(s.player.bufferedAttackHold.start).toBe(true);
+    s.step(gun(), 0);
+    s.player = { ...s.player, hitstopSteps: 0 };
+    s.step(gun());
+    expect(s.player.name).toBe('charge');
+    expect(s.player.bufferedAttackHold.start).toBe(false);
+  });
+  it('ヒットストップ中に届いた AttackHoldEnd も保持され、停止が明けたステップでタメ打ちになる', () => {
+    const s = new Sim();
+    s.step(gun({ attackHoldStart: true }));
+    s.run(0.5, gun());
+    s.step(gun({ attackHoldEnd: true }), 0);
+    expect(s.player.name).toBe('charge');
+    s.step(gun());
+    expect(s.player.name).toBe('chargedShot');
+  });
+});

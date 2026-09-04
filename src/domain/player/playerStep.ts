@@ -1146,7 +1146,13 @@ function applySprintHold(p: PlayerState, input: PlayerStepInput): PlayerState {
 
 /** ヒットストップ中(dt = 0)は入力の受付(バッファ)だけを行う。 */
 function stepFrozen(p: PlayerState, input: PlayerStepInput): PlayerState {
-  const held = applySprintHold(p, input);
+  const held: PlayerState = {
+    ...applySprintHold(p, input),
+    bufferedAttackHold: {
+      start: p.bufferedAttackHold.start || input.attackHoldStart,
+      end: p.bufferedAttackHold.end || input.attackHoldEnd,
+    },
+  };
   if ((held.name === 'attack' || held.name === 'shoot') && held.attack && input.attack) {
     return { ...held, attack: { ...held.attack, bufferedAttack: true } };
   }
@@ -1161,6 +1167,16 @@ export function stepPlayer(
   config: GameConfig,
 ): PlayerStepResult {
   if (dt <= 0) return { player: stepFrozen(player, input), events: [] };
+  // ヒットストップ中に保持した長押し開始 / 終了をこのステップの入力に合流させる
+  const buffered = player.bufferedAttackHold;
+  if (buffered.start || buffered.end) {
+    input = {
+      ...input,
+      attackHoldStart: input.attackHoldStart || buffered.start,
+      attackHoldEnd: input.attackHoldEnd || buffered.end,
+    };
+    player = { ...player, bufferedAttackHold: { start: false, end: false } };
+  }
   const events: PlayerEvent[] = [];
   const released = releasePendingPlayerHit(player);
   events.push(...released.events);

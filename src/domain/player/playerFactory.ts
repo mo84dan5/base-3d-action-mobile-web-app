@@ -21,6 +21,7 @@ export function createPlayer(position: Vec3, yaw: number, config: GameConfig): P
     comboWindowRemaining: 0,
     attack: null,
     strong: null,
+    bufferedAttackHold: { start: false, end: false },
     chargeTime: 0,
     chargeRatio: 0,
     climb: null,

@@ -121,6 +121,11 @@ export class GameApp {
       view: () => this.session?.view() ?? null,
       screen: () => this.flow.screen,
       settings: () => this.settings,
+      attackButton: () => ({
+        held: this.buttons.get('attack').isHeld(),
+        holdStarted: this.buttons.get('attack').hasHoldStarted(),
+        enabled: this.buttons.get('attack').isEnabled(),
+      }),
     };
     (window as unknown as { __b3dDebug: typeof hook }).__b3dDebug = hook;
   }

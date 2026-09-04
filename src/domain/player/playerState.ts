@@ -88,6 +88,8 @@ export interface PlayerState {
   readonly comboWindowRemaining: number;
   readonly attack: AttackData | null;
   readonly strong: StrongAttackData | null;
+  /** ヒットストップ中に届いた攻撃ボタンの長押し開始 / 終了を次の非停止ステップまで保持する(F10 入力の受付) */
+  readonly bufferedAttackHold: { readonly start: boolean; readonly end: boolean };
   /** タメ時間(秒。Charge 中)/ タメ率(ChargedShot 中は発射時の値) */
   readonly chargeTime: number;
   readonly chargeRatio: number;
