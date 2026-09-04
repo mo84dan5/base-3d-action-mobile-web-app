@@ -121,6 +121,18 @@ export class GameApp {
       view: () => this.session?.view() ?? null,
       screen: () => this.flow.screen,
       settings: () => this.settings,
+      vfx: () =>
+        this.renderer?.vfx.group.children
+          .filter((o) => o.visible)
+          .map((o) => ({
+            name: o.name,
+            position: o.position.toArray(),
+            scale: o.scale.toArray(),
+          })) ?? [],
+      vfxAll: () =>
+        this.renderer?.vfx.group.children.map(
+          (o) => `${o.name || o.type}:${o.visible ? 'v' : 'h'}`,
+        ) ?? [],
       attackButton: () => ({
         held: this.buttons.get('attack').isHeld(),
         holdStarted: this.buttons.get('attack').hasHoldStarted(),

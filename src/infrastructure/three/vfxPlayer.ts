@@ -98,14 +98,24 @@ class ParticleSystem {
   }
 }
 
+/**
+ * 斬撃の帯(扇形)。ローカル XY 平面上の弧(中心 +X、中心角 angleDeg)を、内径側を +Z(上)、外径側を −Z に
+ * ずらした円錐状の帯にする。平板だと背後のカメラから真横(エッジオン)になって見えないため、高さを持たせて
+ * 振りの軌跡として読めるようにする。先端に向けて幅を絞る(デザインディレクション「斬撃」)。
+ */
 function fanGeometry(
   innerR: number,
   outerR: number,
   angleDeg: number,
-  segments = 8,
+  segments = 10,
+  innerLift = 0.3,
+  outerDrop = -0.25,
 ): THREE.BufferGeometry {
   const positions: number[] = [];
   const half = (angleDeg * Math.PI) / 360;
+  const push = (a: number, r: number, z: number) => {
+    positions.push(r * Math.cos(a), r * Math.sin(a), z);
+  };
   for (let i = 0; i < segments; i++) {
     const a0 = -half + (i / segments) * half * 2;
     const a1 = -half + ((i + 1) / segments) * half * 2;
@@ -113,26 +123,13 @@ function fanGeometry(
     const taper1 = 1 - Math.abs(a1) / half / 2;
     const o0 = outerR * (0.6 + 0.4 * taper0);
     const o1 = outerR * (0.6 + 0.4 * taper1);
-    positions.push(
-      innerR * Math.cos(a0),
-      innerR * Math.sin(a0),
-      0,
-      o0 * Math.cos(a0),
-      o0 * Math.sin(a0),
-      0,
-      o1 * Math.cos(a1),
-      o1 * Math.sin(a1),
-      0,
-      innerR * Math.cos(a0),
-      innerR * Math.sin(a0),
-      0,
-      o1 * Math.cos(a1),
-      o1 * Math.sin(a1),
-      0,
-      innerR * Math.cos(a1),
-      innerR * Math.sin(a1),
-      0,
-    );
+    // 三角形 2 枚(表裏は DoubleSide で描く)
+    push(a0, innerR, innerLift);
+    push(a0, o0, outerDrop);
+    push(a1, o1, outerDrop);
+    push(a0, innerR, innerLift);
+    push(a1, o1, outerDrop);
+    push(a1, innerR, innerLift);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -170,6 +167,22 @@ function sparkGeometry(): THREE.BufferGeometry {
     new THREE.Float32BufferAttribute([0, -0.025, 0, 0.4, 0, 0, 0, 0.025, 0], 3),
   );
   return g;
+}
+
+/**
+ * 斬撃の板の向き。ローカル X → 前方(yaw)、ローカル Y → 前方から見て右、ローカル Z → 上 の基底に、
+ * 前方軸回りの roll(1 段 +45 度、2 段 −45 度、3 段 0、空中・強攻撃 90 度)を掛け、最後に yaw で世界へ向ける。
+ */
+export function slashOrientation(yaw: number, roll: number): THREE.Quaternion {
+  const basis = new THREE.Matrix4().makeBasis(
+    new THREE.Vector3(0, 0, 1),
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(0, 1, 0),
+  );
+  const q = new THREE.Quaternion().setFromRotationMatrix(basis);
+  q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), roll));
+  q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw));
+  return q;
 }
 
 function easeOut(t: number): number {
@@ -434,17 +447,18 @@ export class VfxPlayer implements EffectPort {
     const outer =
       kind === 'normal3' ? 1.6 : kind === 'enemyAttack' ? 1.0 : kind === 'strongAttack' ? 1.8 : 1.4;
     const color: ColorName = kind === 'enemyAttack' ? 'red' : 'white';
+    // 前方軸回りの傾き。背後のカメラから見て 1 段は右上 → 左下、2 段は左上 → 右下、3 段は水平、空中・強攻撃は縦
     const roll =
       kind === 'normal1'
-        ? Math.PI / 4
+        ? -Math.PI / 4
         : kind === 'normal2'
-          ? -Math.PI / 4
+          ? Math.PI / 4
           : kind === 'airAttack' || kind === 'strongAttack'
             ? Math.PI / 2
             : 0;
     const mesh = this.play(
       `vfx_${kind}_slash_${outer}`,
-      () => new THREE.Mesh(fanGeometry(0.6, outer, 110), this.material(color)),
+      () => new THREE.Mesh(fanGeometry(0.6, outer, 120), this.material(color)),
       0.15,
       (t, m) => {
         const appear = clamp01(t / (2 / 9));
@@ -453,11 +467,11 @@ export class VfxPlayer implements EffectPort {
           t < 0.33 ? 1 : 1 - easeIn((t - 0.33) / 0.67);
       },
     );
-    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    mesh.position
-      .set(position.x, position.y + 0.85, position.z)
-      .addScaledVector(forward, this.config.combat.hitSphereForward);
-    mesh.rotation.set(0, yaw, roll);
+    // 扇形はローカル XY 平面に弧の中心が +X を向くよう作られている。
+    // 振りの軌跡として見せるため、ローカル X を前方、ローカル Z を上に向ける(水平斬りは水平面)。
+    // 斜め・縦斬りは前方軸回りに roll だけ傾ける。弧の中心はプレイヤー(当たり判定球 0.6〜1.4 m に重なる)。
+    mesh.position.set(position.x, position.y + 0.85, position.z);
+    mesh.quaternion.copy(slashOrientation(yaw, roll));
     mesh.material = this.material(color).clone();
   }
 
