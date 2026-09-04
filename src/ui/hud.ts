@@ -35,6 +35,7 @@ export class Hud {
   private readonly hpLabel: HTMLElement;
   private readonly playerDamage: HTMLElement;
   private readonly staminaBar: HTMLElement;
+  private staminaRow!: HTMLElement;
   private readonly staminaFill: HTMLElement;
   private readonly fpsEl: HTMLElement;
   private readonly countdown: HTMLElement;
@@ -48,7 +49,6 @@ export class Hud {
   private readonly enemyHpEls = new Map<number, { root: HTMLElement; fill: HTMLElement }>();
   private lastHp = -1;
   private lastStamina = -1;
-  private staminaFullSince = -1;
   private lastCountdown: string | null = null;
   private lastSkillReady = true;
   private lastPlayerDamageId = -1;
@@ -73,15 +73,17 @@ export class Hud {
     this.hpGhost = el('div', 'bar-ghost');
     this.hpFill = el('div', 'bar-fill');
     this.hpBar.append(this.hpGhost, this.hpFill);
-    this.hpLabel = el('span', 'bar-label', '100/100');
+    this.hpLabel = el('span', 'bar-label value', '100/100');
     this.playerDamage = el('span', 'player-damage');
-    hpRow.append(el('span', 'bar-label', 'HP'), this.hpBar, this.hpLabel, this.playerDamage);
-    const stRow = el('div', 'bar-row');
+    hpRow.append(el('span', 'bar-label lead', 'HP'), this.hpBar, this.hpLabel, this.playerDamage);
+    const stRow = el('div', 'bar-row st');
+    stRow.dataset.testid = 'stamina-row';
+    this.staminaRow = stRow;
     this.staminaBar = el('div', 'bar stamina hidden');
     this.staminaBar.dataset.testid = 'stamina-bar';
     this.staminaFill = el('div', 'bar-fill');
     this.staminaBar.append(this.staminaFill);
-    stRow.append(el('span', 'bar-label', 'ST'), this.staminaBar);
+    stRow.append(el('span', 'bar-label lead', 'ST'), this.staminaBar);
     bars.append(hpRow, stRow);
     const right = el('div', 'hud-top-right');
     this.fpsEl = el('div', 'fps');
@@ -251,11 +253,7 @@ export class Hud {
     const st = p.stamina / p.staminaMax;
     const draining = p.stamina < this.lastStamina - 1e-6;
     this.staminaFill.style.transform = `scaleX(${st})`;
-    const full = p.stamina >= p.staminaMax - 1e-6;
-    if (full && this.staminaFullSince < 0) this.staminaFullSince = view.worldTime;
-    if (!full) this.staminaFullSince = -1;
-    const hide = full && view.worldTime - this.staminaFullSince >= 1;
-    this.staminaBar.classList.toggle('hidden', hide);
+    // スタミナバーは満タン時も常時表示する(S02 要素 3。2026-09-05 変更)
     this.staminaBar.classList.toggle('draining', draining && !p.staminaLow);
     this.staminaBar.classList.toggle('low', p.staminaLow && p.stamina > 0);
     this.staminaBar.classList.toggle('empty', p.stamina <= 0);

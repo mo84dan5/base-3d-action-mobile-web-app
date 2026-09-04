@@ -215,8 +215,8 @@ button {
 }
 
 :root[data-orientation='portrait'] .bars {
-  width: 200px;
-  max-width: 52vw;
+  width: 220px;
+  max-width: 58vw;
 }
 
 .bar-row {
@@ -225,8 +225,20 @@ button {
   gap: 8px;
 }
 
-:root[data-orientation='portrait'] .bar-row.hp {
-  flex-wrap: wrap;
+.bar-row.hp {
+  position: relative;
+}
+
+/* 縦画面では被ダメージ数値をバーの下に出す(S02 要素 2) */
+:root[data-orientation='portrait'] .player-damage {
+  position: absolute;
+  left: 30px;
+  top: 100%;
+  margin-top: 2px;
+}
+
+.bar-row.st {
+  min-height: 10px;
 }
 
 .bar {
@@ -262,11 +274,6 @@ button {
 
 .bar.stamina {
   height: 10px;
-  transition: opacity 1s;
-}
-
-.bar.stamina.hidden {
-  opacity: 0;
 }
 
 .bar.stamina .bar-fill {
@@ -300,14 +307,23 @@ button {
 .bar-label {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  min-width: 56px;
+}
+
+.bar-label.lead {
+  width: 22px;
+  flex: none;
+}
+
+.bar-label.value {
+  min-width: 48px;
+  flex: none;
 }
 
 .player-damage {
   color: var(--red);
   font-weight: 800;
   font-size: 16px;
-  min-width: 32px;
+  min-width: 0;
   text-shadow:
     0 0 1.5px #300,
     0 0 1.5px #300;

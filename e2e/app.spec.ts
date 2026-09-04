@@ -619,3 +619,22 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
     expect(stored).toContain('"attackStyle":"gun"');
   });
 });
+
+test.describe('HUD のバー表示(S02 要素 2・3)', () => {
+  test('縦画面でも HP バー本体が 120 px 以上あり、スタミナ行は満タン時も表示されている', async ({
+    page,
+  }) => {
+    await startGame(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('html')).toHaveAttribute('data-orientation', 'portrait');
+    const box = await page.getByTestId('hp-bar').boundingBox();
+    expect(box).not.toBeNull();
+    if (box) expect(box.width).toBeGreaterThanOrEqual(120);
+    await page.waitForTimeout(1200);
+    await expect(page.getByTestId('stamina-row')).toBeVisible();
+    await expect(page.getByTestId('stamina-bar')).toBeVisible();
+    const st = await page.getByTestId('stamina-bar').boundingBox();
+    expect(st).not.toBeNull();
+    if (st) expect(st.width).toBeGreaterThanOrEqual(120);
+  });
+});
