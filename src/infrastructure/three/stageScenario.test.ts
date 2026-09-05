@@ -154,6 +154,22 @@ describe('要素 2・3: 丘と急な坂', () => {
   });
 });
 
+describe('要素 8: オーバーハング', () => {
+  it('下部(z = −2 の面)を登ると張り出しの天井(高さ 5 m)で面を見失い、すり抜けずに落下する', () => {
+    const r = new Run(vec3(-22, 0, 2));
+    expect(r.until((p) => p.climb?.phase === 'climbing', MINUS_Z, 3)).toBe(true);
+    let maxHead = 0;
+    for (let i = 0; i < 60 * 8 && r.player.name === 'climb'; i++) {
+      r.step(toward(0, 1));
+      maxHead = Math.max(maxHead, r.player.position.y + 1.7);
+    }
+    expect(r.player.name).toBe('fall');
+    expect(maxHead).toBeLessThanOrEqual(5.1);
+    expect(r.until((p) => p.name === 'idle', NO_INPUT, 3)).toBe(true);
+    expect(r.player.position.y).toBeLessThan(0.5);
+  });
+});
+
 describe('要素 12: 氷柱(唯一の登攀不可)', () => {
   it('氷柱へ走り込んでも取り付かず、押し戻される', () => {
     const r = new Run(vec3(7, 0, -1));

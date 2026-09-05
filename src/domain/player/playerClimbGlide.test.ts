@@ -88,6 +88,19 @@ describe('崖登り(F08)', () => {
     expect(s.player.position.y).toBeCloseTo(6, 1);
     expect(s.player.position.z).toBeGreaterThan(3);
   });
+  it('登攀中に頭上の天井(オーバーハングの張り出し)へ達すると面を見失って落下し、天井をすり抜けない', () => {
+    // 高さ 6 m の壁の前に、高さ 3〜5 m で手前に 2 m 張り出した天井
+    const s = new Sim([CLIFF, wallBox(1, 2, { width: 8, depth: 2.5, yBase: 3 })]);
+    s.until((p) => p.climb?.phase === 'climbing', forward(1), 3);
+    let maxHead = 0;
+    for (let i = 0; i < 60 * 6 && s.player.name === 'climb'; i++) {
+      s.step(stickInput(0, 1));
+      maxHead = Math.max(maxHead, s.player.position.y + 1.7);
+    }
+    expect(s.player.name).toBe('fall');
+    expect(s.events.some((e) => e.type === 'climbDetached' && e.reason === 'lost')).toBe(true);
+    expect(maxHead).toBeLessThanOrEqual(3.05);
+  });
   it('登攀不可の壁には取り付かない', () => {
     const s = new Sim([wallBox(3, 4, { unclimbable: true })]);
     s.run(2, forward(1));

@@ -23,7 +23,7 @@ import {
   yawFromDirection,
   type Vec3,
 } from '../math/vec3';
-import { integrateGravity } from '../physics/surface';
+import { classifySurface, integrateGravity } from '../physics/surface';
 import {
   consumeStamina,
   drainStamina,
@@ -690,6 +690,13 @@ function stepClimb(p: PlayerState, ctx: Ctx): PlayerState {
 /** 面の追従(頂上判定 → 面の再取得)。 */
 function followWall(p: PlayerState, ctx: Ctx, normal: Vec3): PlayerState {
   const { config } = ctx;
+  // 登攀中も地形との衝突を解決する。頭上の天井(法線が下向き)に達したら面を見失い Fall(F08 面の追従 4)
+  const resolved = ctx.terrain.resolveCapsule(p.position, playerCapsule(config));
+  const hitCeiling = resolved.contacts.some(
+    (c) => classifySurface(c.normal.y, config.physics) === 'ceiling',
+  );
+  if (hitCeiling) return detachClimb(p, ctx, 'lost', 0);
+  p = { ...p, position: resolved.position };
   const mantleTo = findMantleTarget(p.position, normal, ctx.terrain, config);
   if (mantleTo && p.climb) {
     ctx.events.push({ type: 'mantled' });

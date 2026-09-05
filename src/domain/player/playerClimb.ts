@@ -13,6 +13,7 @@ import {
 } from '../math/vec3';
 import { classifySurface } from '../physics/surface';
 import type { TerrainHit, TerrainQuery } from '../terrain/terrainQuery';
+import { playerCapsule } from './playerPhysics';
 
 // 崖登りの取り付き判定・面の追従・頂上判定(F08)。
 
@@ -125,10 +126,20 @@ export function findMantleTarget(
 ): Vec3 | null {
   const c = config.climb;
   const into = scale(normal, -1);
+  const centerH = c.attachCheckHeights[0];
+  // カプセル中心から頭上判定の高さまで真上に障害物(オーバーハングの張り出しなど)があれば頂上ではない
+  const center = add(feet, vec3(0, centerH, 0));
+  if (terrain.raycast(center, vec3(0, 1, 0), c.topCheckHeight - centerH)) return null;
   const head = add(feet, vec3(0, c.topCheckHeight, 0));
   if (terrain.raycast(head, into, c.topCheckForward)) return null;
   const beyond = add(head, scale(into, c.topCheckForward + c.topCheckInset));
   const down = terrain.raycast(beyond, vec3(0, -1, 0), c.topCheckDownDistance);
   if (!down || classifySurface(down.normal.y, config.physics) !== 'walkable') return null;
+  // よじ登り先にカプセルを置いて地形と重なる(オーバーハングの内部など)なら頂上ではない
+  const placed = terrain.resolveCapsule(down.point, playerCapsule(config));
+  if (placed.contacts.some((contact) => contact.depth > MANTLE_CLEARANCE_TOLERANCE)) return null;
   return down.point;
 }
+
+/** よじ登り先の空きを判定する貫入の許容量(m)。浮動小数の誤差と接地面との接触を無視する */
+const MANTLE_CLEARANCE_TOLERANCE = 0.02;
