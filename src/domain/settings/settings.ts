@@ -1,11 +1,12 @@
+import { findAttackStyle } from '../attackStyle/attackStyleCatalog';
 import { clamp } from '../math/vec3';
 
 // 設定と永続化(F06)。localStorage の読み書きは infrastructure が行い、本モジュールは検証・移行・直列化のみを担う。
 
 export type StickMode = 'floating' | 'fixed';
 export type Quality = 'low' | 'medium' | 'high';
-/** 攻撃スタイル(F04): 格闘 / 銃撃 */
-export type AttackStyle = 'melee' | 'gun';
+/** 攻撃スタイル(F04 / F11): カタログのスタイル ID。未知・未実装の ID は読み込み時に melee へ戻す */
+export type AttackStyle = string;
 
 export interface Settings {
   readonly cameraSensitivity: number;
@@ -36,7 +37,11 @@ export const defaultSettings: Settings = {
 
 const STICK_MODES: readonly StickMode[] = ['floating', 'fixed'];
 const QUALITIES: readonly Quality[] = ['low', 'medium', 'high'];
-const ATTACK_STYLES: readonly AttackStyle[] = ['melee', 'gun'];
+
+/** F11 のカタログに存在する ID か。 */
+export function isKnownAttackStyle(value: unknown): value is AttackStyle {
+  return typeof value === 'string' && findAttackStyle(value) !== null;
+}
 
 /** 感度を 0.5〜2.0 にクランプし 0.1 刻みに丸める。 */
 export function normalizeSensitivity(value: number): number {
@@ -81,7 +86,9 @@ function fieldsFrom(data: Record<string, unknown>): Settings {
     invertCameraY: readBoolean(data.invertCameraY, defaultSettings.invertCameraY),
     invertCameraX: readBoolean(data.invertCameraX, defaultSettings.invertCameraX),
     stickMode: readEnum(data.stickMode, STICK_MODES, defaultSettings.stickMode),
-    attackStyle: readEnum(data.attackStyle, ATTACK_STYLES, defaultSettings.attackStyle),
+    attackStyle: isKnownAttackStyle(data.attackStyle)
+      ? data.attackStyle
+      : defaultSettings.attackStyle,
     quality: readEnum(data.quality, QUALITIES, defaultSettings.quality),
     showFps: readBoolean(data.showFps, defaultSettings.showFps),
   };

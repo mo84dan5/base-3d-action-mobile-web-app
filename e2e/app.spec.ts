@@ -3,7 +3,12 @@ import type { ViewState } from '../src/application/viewState';
 
 declare global {
   interface Window {
-    __b3dDebug?: { view: () => ViewState | null; screen: () => string };
+    __b3dDebug?: {
+      view: () => ViewState | null;
+      screen: () => string;
+      grantEnergy?: (amount: number) => void;
+      vfxAll?: () => string[];
+    };
   }
 }
 
@@ -500,7 +505,7 @@ test.describe('残り項目の裏付け(S02 / F09 / F10)', () => {
 });
 
 test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
-  async function startWithStyle(page: Page, style: 'melee' | 'gun'): Promise<void> {
+  async function startWithStyle(page: Page, style: string): Promise<void> {
     await page.addInitScript((s) => {
       localStorage.setItem('b3d.settings.v1', JSON.stringify({ version: 1, attackStyle: s }));
     }, style);
@@ -609,14 +614,107 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
     expect(await enemyHp(page, 3)).toBeLessThanOrEqual(25);
   });
 
-  test('S03 の攻撃スタイル設定が保存される', async ({ page }) => {
+  test('S03 の攻撃スタイル行から S05 が開き、選択が保存されて S03 の表示名が変わる', async ({
+    page,
+  }) => {
     await startGame(page);
     await tap(page, 'pause');
-    const gun = page.getByTestId('setting-attackStyle').locator('button[data-value="gun"]');
-    await gun.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
-    await expect(gun).toHaveClass(/on/);
+    await expect(page.getByTestId('setting-attackStyle')).toContainText('格闘');
+    await tap(page, 'setting-attackStyle');
+    await expect(page.locator('[data-screen="styleSelect"]')).toBeVisible();
+    await expect(page.getByTestId('style-category-sword')).toHaveClass(/on/);
+    await tap(page, 'style-category-firearm');
+    await tap(page, 'style-item-shotgun');
+    await expect(page.getByTestId('style-item-shotgun')).toHaveClass(/on/);
+    await expect(page.getByTestId('style-detail-name')).toHaveText('ショットガン');
+    await expect(page.getByTestId('style-unimplemented')).toHaveCount(0);
     const stored = await page.evaluate(() => localStorage.getItem('b3d.settings.v1'));
-    expect(stored).toContain('"attackStyle":"gun"');
+    expect(stored).toContain('"attackStyle":"shotgun"');
+    await tap(page, 'style-done');
+    await expect(page.locator('[data-screen="styleSelect"]')).toBeHidden();
+    await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+    await expect(page.getByTestId('setting-attackStyle')).toContainText('ショットガン(銃火器)');
+    await tap(page, 'resume');
+    await expect(page.getByTestId('style-name')).toHaveText('ショットガン');
+  });
+
+  test('S05 は 10 系統 × 10 スタイルを一覧に出し、未実装のスタイルは無い', async ({ page }) => {
+    await startGame(page);
+    await tap(page, 'pause');
+    await tap(page, 'setting-attackStyle');
+    const categories = [
+      'sword',
+      'strike',
+      'polearm',
+      'firearm',
+      'ranged',
+      'magic',
+      'placement',
+      'defense',
+      'movement',
+      'special',
+    ];
+    for (const c of categories) {
+      await tap(page, `style-category-${c}`);
+      await expect(page.getByTestId('style-list').locator('button')).toHaveCount(10);
+      await expect(page.getByTestId('style-list').getByText('未実装')).toHaveCount(0);
+    }
+    await tap(page, 'style-close');
+    await expect(page.locator('[data-screen="styleSelect"]')).toBeHidden();
+  });
+
+  test('ショットガン: 攻撃ボタンで 5 本の散弾が出て正面の徘徊型にダメージが入る', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await startWithStyle(page, 'shotgun');
+    await expect(page.getByTestId('style-name')).toHaveText('ショットガン');
+    await approach(page, 3, 5.5);
+    const before = await enemyHp(page, 3);
+    // 徘徊型は接近して攻撃してくるため、押下が被弾で無効になることがある。ダメージが入るまで押し直す
+    for (let i = 0; i < 6; i++) {
+      await page.waitForFunction(
+        () => window.__b3dDebug?.view()?.hud.buttons.attack.enabled === true,
+      );
+      await tap(page, 'btn-attack');
+      await waitWorld(page, 0.4);
+      if ((await enemyHp(page, 3)) < before) break;
+    }
+    expect(await enemyHp(page, 3)).toBeLessThan(before);
+    const tracers = await page.evaluate(
+      () =>
+        window.__b3dDebug?.vfxAll?.().filter((n) => n.startsWith('vfx_shoot_tracer')).length ?? 0,
+    );
+    expect(tracers).toBeGreaterThanOrEqual(5);
+  });
+
+  test('魔力弾: 追尾する発射体が敵に当たり、エネルギーを消費する', async ({ page }) => {
+    test.setTimeout(120_000);
+    await startWithStyle(page, 'magic_bolt');
+    await approach(page, 3, 8);
+    // エネルギーは初期 0 なので、デバッグ用フックでセッションへ直接与える
+    await page.evaluate(() => window.__b3dDebug?.grantEnergy?.(50));
+    await page.waitForFunction(
+      () => window.__b3dDebug?.view()?.hud.buttons.attack.enabled === true,
+    );
+    const before = await enemyHp(page, 3);
+    await tap(page, 'btn-attack');
+    await page.waitForFunction(
+      () => (window.__b3dDebug?.view()?.projectiles.length ?? 0) > 0,
+      null,
+      {
+        timeout: 10_000,
+      },
+    );
+    await page.waitForFunction(
+      ([i, hp]) => (window.__b3dDebug?.view()?.enemies.find((x) => x.id === i)?.hp ?? hp) < hp,
+      [3, before] as const,
+      { timeout: 20_000 },
+    );
+    expect(await enemyHp(page, 3)).toBeLessThan(before);
+    const energy = await page.evaluate(() => window.__b3dDebug?.view()?.hud.energyRatio ?? 1);
+    // 消費 3 とヒットの獲得 3 で相殺されるため、上限は 0.5(獲得だけなら 0.53 になる)
+    expect(energy).toBeLessThanOrEqual(0.5);
   });
 });
 

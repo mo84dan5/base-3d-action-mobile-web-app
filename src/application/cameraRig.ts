@@ -99,10 +99,16 @@ function stateTargets(player: PlayerState, config: GameConfig) {
   const c = config.camera;
   const climbing = player.name === 'climb';
   const gliding = player.name === 'glide';
+  // タメ中のカメラ距離(スナイパー。F11): 既定距離との差ぶん寄る
+  const chargeDistance =
+    player.name === 'charge' && player.action?.spec.kind === 'charge'
+      ? player.action.spec.cameraDistance
+      : undefined;
+  const chargeBonus = chargeDistance !== undefined ? chargeDistance - c.defaultDistance : 0;
   return {
     targetOffsetY: climbing ? c.climbTargetOffsetY : c.targetOffsetY,
     minPitchDeg: climbing ? c.climbMinPitchDeg : c.minPitchDeg,
-    extraDistance: gliding ? c.glideDistanceBonus : 0,
+    extraDistance: gliding ? c.glideDistanceBonus : chargeBonus,
   };
 }
 
@@ -137,7 +143,7 @@ export function updateCameraRig(
     goals.extraDistance,
     dt,
     c.stateTransitionTime,
-    c.glideDistanceBonus,
+    Math.max(c.glideDistanceBonus, Math.abs(goals.extraDistance - rig.extraDistance)),
   );
   const limits = { minDeg: minPitchDeg, maxDeg: pitchLimitsFor('normal', c).maxDeg };
 

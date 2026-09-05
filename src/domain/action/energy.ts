@@ -16,6 +16,10 @@ export function gainEnergy(e: Energy, amount: number): Energy {
   return { ...e, value: Math.min(e.max, e.value + Math.max(0, amount)) };
 }
 
+export function spendEnergy(e: Energy, amount: number): Energy {
+  return { ...e, value: Math.max(0, e.value - Math.max(0, amount)) };
+}
+
 export function spendAllEnergy(e: Energy): Energy {
   return { ...e, value: 0 };
 }

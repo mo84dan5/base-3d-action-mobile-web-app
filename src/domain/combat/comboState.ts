@@ -8,12 +8,13 @@ export type AttackPhase = 'startup' | 'active' | 'recovery' | 'done';
  * 次に出す段。3 段目の後は入力タイミングに関係なく 1 段目、猶予(全体時間の終了後 0.8 秒)を超えても 1 段目。
  */
 export function nextComboStage(
-  lastStage: 0 | ComboStage,
+  lastStage: number,
   comboWindowRemaining: number,
-): ComboStage {
-  if (lastStage === 0 || lastStage === 3) return 1;
+  stageCount = 3,
+): number {
+  if (lastStage <= 0 || lastStage >= stageCount) return 1;
   if (comboWindowRemaining <= 0) return 1;
-  return (lastStage + 1) as ComboStage;
+  return lastStage + 1;
 }
 
 export function attackPhase(elapsed: number, timing: AttackTiming): AttackPhase {

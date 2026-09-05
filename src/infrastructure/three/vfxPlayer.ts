@@ -5,6 +5,9 @@ import type { ViewState } from '../../application/viewState';
 import type { GameConfig } from '../../domain/config/gameConfig';
 import type { AttackKind } from '../../domain/hitReaction/hitTables';
 import type { Vec3 } from '../../domain/math/vec3';
+import type { StyleCategory } from '../../domain/attackStyle/actionSpec';
+import { findAttackStyle } from '../../domain/attackStyle/attackStyleCatalog';
+import type { HitVolume } from '../../domain/combat/hitVolume';
 import { qualityPreset, type Quality, type QualityPreset } from '../../domain/settings/settings';
 
 // VFX プレイヤー(デザインディレクション エフェクト)。ローポリ・フラットシェード、ポリゴンの形だけで作る。
@@ -357,7 +360,71 @@ export class VfxPlayer implements EffectPort {
   trigger(event: EffectEvent): void {
     switch (event.kind) {
       case 'attackSwing':
-        this.slash(event.attack, event.position, event.yaw);
+        this.attackSwing(event.attack, event.position, event.yaw, event.action, event.styleId);
+        break;
+      case 'attackVolume':
+        this.attackVolume(event.attack, event.volume, event.styleId);
+        break;
+      case 'projectileLaunch':
+        this.dustPuff(event.position, 2, 0.1);
+        break;
+      case 'explosion':
+        this.ring(event.position, 'orange', event.radius);
+        this.shardBurst(event.position, 6, 'orange');
+        this.dustPuff(event.position, 6, 0.3);
+        break;
+      case 'fieldPulse':
+        this.ring(event.position, 'uiCyan', event.radius);
+        break;
+      case 'placed':
+        this.ring(event.position, 'uiCyan', Math.max(0.6, Math.min(event.radius, 2.0)));
+        this.dustPuff(event.position, 3, 0.15);
+        break;
+      case 'placedExpire':
+        this.dustPuff(event.position, 3, 0.15);
+        break;
+      case 'summon':
+        this.ring(event.position, 'cyan', 1.2);
+        break;
+      case 'summonStrike':
+        this.ring(event.position, 'cyan', Math.max(0.6, event.radius));
+        this.spark('light', event.position);
+        break;
+      case 'summonExpire':
+        this.dustPuff(event.position, 2, 0.1);
+        break;
+      case 'guard':
+        if (event.phase === 'success') {
+          this.ring(event.position, 'white', 1.2);
+          this.spark('heavy', {
+            x: event.position.x + Math.sin(event.yaw) * 0.7,
+            y: event.position.y + 0.85,
+            z: event.position.z + Math.cos(event.yaw) * 0.7,
+          });
+        }
+        break;
+      case 'buff':
+        this.buffRing(event.effect, event.position, event.radius, event.duration);
+        break;
+      case 'maneuver':
+        this.afterimageQueue.push({
+          position: new THREE.Vector3(event.position.x, event.position.y, event.position.z),
+          yaw: Math.atan2(event.direction.x, event.direction.z),
+          delay: 0,
+        });
+        this.dustPuff(event.position, 3, 0.15);
+        break;
+      case 'blink':
+        this.dustPuff(event.from, 4, 0.2);
+        this.ring(event.to, 'white', 1.0);
+        this.dustPuff(event.to, 4, 0.2);
+        break;
+      case 'pull':
+        this.tracer(event.from, event.to, false, 0);
+        break;
+      case 'selfDamage':
+        this.ring(event.position, 'orange', 1.5);
+        this.shardBurst(event.position, 8, 'orange');
         break;
       case 'hitSpark':
         this.spark(event.attack, event.position);
@@ -439,21 +506,158 @@ export class VfxPlayer implements EffectPort {
     }
   }
 
+  /** スタイル行動の発生時の表現(デザインディレクション 系統別の言語)。 */
+  private attackSwing(
+    kind: AttackKind,
+    position: Vec3,
+    yaw: number,
+    action: string | null,
+    styleId: string | null,
+  ): void {
+    const category: StyleCategory | null = styleId
+      ? (findAttackStyle(styleId)?.category ?? null)
+      : null;
+    if (action === 'lunge' && category !== 'sword' && category !== 'polearm') {
+      this.dustPuff(position, 4, 0.2);
+      return;
+    }
+    switch (category) {
+      case 'strike':
+      case 'special':
+        // 打撃: 足元の衝撃波リング。重い区分ほど大きい
+        this.ring(position, 'white', kind === 'huge' ? 2.2 : kind === 'heavy' ? 1.6 : 1.0);
+        this.dustPuff(position, 3, 0.15);
+        return;
+      case 'polearm':
+        this.thrust(position, yaw, kind === 'heavy' || kind === 'huge' ? 2.6 : 2.0);
+        return;
+      case 'magic':
+        this.ring(position, 'yellow', 1.2);
+        return;
+      case 'defense':
+      case 'movement':
+      case 'placement':
+      case 'ranged':
+      case 'firearm':
+        this.slash(kind, position, yaw);
+        return;
+      default:
+        this.slash(kind, position, yaw);
+    }
+  }
+
+  /** 扇・リング・直線の判定を、その形のまま地面と正面に描く。 */
+  private attackVolume(_kind: AttackKind, volume: HitVolume, styleId: string | null): void {
+    const category = styleId ? findAttackStyle(styleId)?.category : undefined;
+    const color: ColorName =
+      category === 'magic' ? 'yellow' : category === 'special' ? 'orange' : 'cyan';
+    switch (volume.type) {
+      case 'fan': {
+        const mesh = this.play(
+          `vfx_volume_fan_${color}`,
+          () =>
+            new THREE.Mesh(
+              groundFanGeometry(1.0, volume.angleDeg),
+              this.material(color, false, 0.5),
+            ),
+          0.25,
+          (t, m) => {
+            m.scale.setScalar(volume.radius * easeOut(clamp01(t / 0.3)));
+            (m.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - t);
+          },
+        );
+        mesh.position.set(volume.origin.x, volume.origin.y - 0.8, volume.origin.z);
+        mesh.rotation.set(0, volume.yaw, 0);
+        mesh.material = this.material(color, false, 0.5).clone();
+        return;
+      }
+      case 'ring':
+        this.ring(
+          { x: volume.origin.x, y: volume.origin.y - 0.85, z: volume.origin.z },
+          color,
+          volume.radius,
+        );
+        return;
+      case 'line':
+        this.thrust(
+          { x: volume.origin.x, y: volume.origin.y - 0.85, z: volume.origin.z },
+          volume.yaw,
+          volume.length,
+          volume.width,
+        );
+        return;
+      case 'sphere':
+        this.ring(
+          { x: volume.center.x, y: volume.center.y - 0.85, z: volume.center.z },
+          color,
+          volume.radius,
+        );
+        return;
+    }
+  }
+
+  /** 長柄の突き: 幅 0.05 m、長さ = リーチの細長い線。 */
+  private thrust(position: Vec3, yaw: number, length: number, width = 0.05): void {
+    const mesh = this.play(
+      'vfx_thrust_line',
+      () => new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.material('cyan')),
+      0.15,
+      (t, m) => {
+        (m.material as THREE.MeshBasicMaterial).opacity = 1 - easeIn(t);
+      },
+    );
+    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    mesh.position
+      .set(position.x, position.y + 0.85, position.z)
+      .addScaledVector(forward, length / 2 + 0.3);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), forward);
+    mesh.scale.set(Math.max(width, 0.05), length, 1);
+    mesh.material = this.material('cyan').clone();
+  }
+
+  /** 一時的な能力変化の表現。時間停止はシアンの大きなリングが縮み、挑発は黄のリングが広がる。 */
+  private buffRing(effect: string, position: Vec3, radius: number, duration: number): void {
+    switch (effect) {
+      case 'timeStop':
+        this.shrinkRing(position, 'uiCyan', Math.max(1, radius), Math.min(0.6, duration));
+        this.dim = 0.2;
+        return;
+      case 'taunt':
+        this.ring(position, 'yellow', Math.max(1, radius));
+        return;
+      case 'damageReduction':
+        this.ring(position, 'white', 1.2);
+        return;
+      case 'rhythm':
+      case 'momentum':
+      default:
+        this.ring(position, 'cyan', 0.8);
+    }
+  }
+
   private slash(
     kind: AttackKind,
     position: { x: number; y: number; z: number },
     yaw: number,
   ): void {
     const outer =
-      kind === 'normal3' ? 1.6 : kind === 'enemyAttack' ? 1.0 : kind === 'strongAttack' ? 1.8 : 1.4;
+      kind === 'normal3' || kind === 'medium'
+        ? 1.6
+        : kind === 'enemyAttack'
+          ? 1.0
+          : kind === 'strongAttack' || kind === 'heavy'
+            ? 1.8
+            : kind === 'huge'
+              ? 2.2
+              : 1.4;
     const color: ColorName = kind === 'enemyAttack' ? 'red' : 'white';
     // 前方軸回りの傾き。背後のカメラから見て 1 段は右上 → 左下、2 段は左上 → 右下、3 段は水平、空中・強攻撃は縦
     const roll =
-      kind === 'normal1'
+      kind === 'normal1' || kind === 'light'
         ? -Math.PI / 4
         : kind === 'normal2'
           ? Math.PI / 4
-          : kind === 'airAttack' || kind === 'strongAttack'
+          : kind === 'airAttack' || kind === 'strongAttack' || kind === 'heavy' || kind === 'huge'
             ? Math.PI / 2
             : 0;
     const mesh = this.play(
@@ -477,7 +681,13 @@ export class VfxPlayer implements EffectPort {
 
   private spark(kind: AttackKind, position: { x: number; y: number; z: number }): void {
     const count = this.particleCount(
-      kind === 'normal3' || kind === 'strongAttack' || kind === 'chargedShot' ? 6 : 4,
+      kind === 'normal3' ||
+        kind === 'strongAttack' ||
+        kind === 'chargedShot' ||
+        kind === 'heavy' ||
+        kind === 'huge'
+        ? 6
+        : 4,
     );
     for (let i = 0; i < count; i++) {
       const dir = new THREE.Vector3(
@@ -496,8 +706,9 @@ export class VfxPlayer implements EffectPort {
         rotation: new THREE.Euler(0, Math.atan2(dir.x, dir.z), Math.asin(dir.y)),
       });
     }
-    if (kind === 'normal3') this.ring(position, 'cyan', 1.0);
-    if (kind === 'strongAttack') this.ring(position, 'cyan', 1.5);
+    if (kind === 'normal3' || kind === 'medium') this.ring(position, 'cyan', 1.0);
+    if (kind === 'strongAttack' || kind === 'heavy') this.ring(position, 'cyan', 1.5);
+    if (kind === 'huge') this.ring(position, 'cyan', 2.0);
   }
 
   /** 弾道線: 射線に沿った細長い板。射撃は白で 3 ステップ、タメ打ちは幅 0.12 m の淡シアン + 加算の白い芯で 12 ステップ。 */

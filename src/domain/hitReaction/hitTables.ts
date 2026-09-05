@@ -11,7 +11,12 @@ export type AttackKind =
   | 'strongAttack'
   | 'shoot'
   | 'chargedShot'
-  | 'enemyAttack';
+  | 'enemyAttack'
+  // スタイル定義(F11)のヒット区分
+  | 'light'
+  | 'medium'
+  | 'heavy'
+  | 'huge';
 
 export type ShakeEvent = 'playerHit' | 'enemyDefeat' | 'playerDefeat' | 'landing' | 'burstActivate';
 
@@ -36,6 +41,14 @@ export function hitstopFor(kind: AttackKind, config: HitReactionConfig): Hitstop
       return config.hitstop.shoot;
     case 'chargedShot':
       return config.hitstop.chargedShotWeak;
+    case 'light':
+      return config.hitstop.light;
+    case 'medium':
+      return config.hitstop.medium;
+    case 'heavy':
+      return config.hitstop.heavy;
+    case 'huge':
+      return config.hitstop.huge;
   }
 }
 
@@ -80,6 +93,14 @@ export function shakeForHit(kind: AttackKind, config: HitReactionConfig): ShakeS
       return null;
     case 'enemyAttack':
       return config.shake.playerHit;
+    case 'light':
+      return null;
+    case 'medium':
+      return config.shake.medium;
+    case 'heavy':
+      return config.shake.heavy;
+    case 'huge':
+      return config.shake.huge;
   }
 }
 

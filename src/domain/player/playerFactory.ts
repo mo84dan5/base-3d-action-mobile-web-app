@@ -17,10 +17,12 @@ export function createPlayer(position: Vec3, yaw: number, config: GameConfig): P
     coyoteRemaining: 0,
     jumpBufferRemaining: 0,
     airAttackUsed: false,
+    airAttackCount: 0,
     lastAttackStage: 0,
     comboWindowRemaining: 0,
     attack: null,
     strong: null,
+    action: null,
     bufferedAttackHold: { start: false, end: false },
     chargeTime: 0,
     chargeRatio: 0,
@@ -34,7 +36,10 @@ export function createPlayer(position: Vec3, yaw: number, config: GameConfig): P
     hitstopSteps: 0,
     sprintHeld: false,
     dashDirection: ZERO3,
+    sinceDash: Infinity,
     attackCounter: 0,
     pendingHit: null,
+    buffs: [],
+    ammo: null,
   };
 }

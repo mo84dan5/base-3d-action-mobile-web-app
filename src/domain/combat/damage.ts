@@ -29,6 +29,20 @@ export interface HitRequest {
   readonly enemyStunAvailable?: boolean;
   /** タメ打ちのタメ率 0〜1(ヒットストップの長さに使う) */
   readonly chargeRatio?: number;
+  /** スタイル定義(F11)からの上書き。無ければ攻撃種別の表を使う */
+  readonly profile?: HitProfile;
+}
+
+/** スタイル定義が決めるヒットの性質(F11)。 */
+export interface HitProfile {
+  readonly knockbackSpeed: number;
+  readonly energyGain: number;
+  /** 硬直の秒数を上書きする(硬直付与・転倒)。undefined は既定 */
+  readonly stunSeconds?: number;
+  /** ヒットごとの攻撃側 HP 回復(吸収) */
+  readonly heal?: number;
+  /** 継続ダメージ(毎秒 × 秒) */
+  readonly dot?: { readonly perSecond: number; readonly duration: number };
 }
 
 export type HitStateTransition = 'none' | 'toFall' | 'hitState';
@@ -49,6 +63,8 @@ export interface HitResolution {
   readonly shake: ShakeSpec | null;
   readonly energyGain: number;
   readonly vibrationMs: number;
+  readonly heal: number;
+  readonly dot: { readonly perSecond: number; readonly duration: number } | null;
 }
 
 export function hpAfterDamage(hp: number, damage: number): number {
@@ -111,7 +127,7 @@ function energyGainFor(kind: AttackKind, config: GameConfig): number {
 }
 
 function knockbackVector(req: HitRequest, config: GameConfig): Vec3 | null {
-  const speed = knockbackSpeedFor(req.attackKind, config);
+  const speed = req.profile?.knockbackSpeed ?? knockbackSpeedFor(req.attackKind, config);
   if (speed <= 0) return null;
   const dir = horizontalKnockbackDirection(req.attackerCenter, req.victimCenter, req.victimYaw);
   return scale(dir, speed);
@@ -184,7 +200,10 @@ export function resolveHit(req: HitRequest, config: GameConfig): HitResolution |
   if (isIgnored(req)) return null;
   const victimIsPlayer = req.victimId === 'player';
   const policy = policyFor(req, config);
-  const stunSeconds = victimIsPlayer ? config.combat.playerHitStun : config.enemy.hitStun;
+  const defaultStun = victimIsPlayer ? config.combat.playerHitStun : config.enemy.hitStun;
+  const stunSeconds = req.profile?.stunSeconds ?? defaultStun;
+  const forcedStun = req.profile?.stunSeconds !== undefined && !victimIsPlayer;
+  const applyStun = (policy.applyStun || forcedStun) && req.victimCategory !== 'enemyDummy';
   return {
     damage: req.damage,
     hitstop:
@@ -192,15 +211,20 @@ export function resolveHit(req: HitRequest, config: GameConfig): HitResolution |
         ? hitstopForChargedShot(req.chargeRatio ?? 0, config.hitReaction)
         : hitstopFor(req.attackKind, config.hitReaction),
     flash: victimIsPlayer ? 'red' : 'white',
-    applyStun: policy.applyStun,
-    stunSeconds: policy.applyStun ? stunSeconds : 0,
+    applyStun,
+    stunSeconds: applyStun ? stunSeconds : 0,
     invincibleSeconds: policy.invincible ? config.combat.playerInvincibleTime : 0,
     knockback: policy.knockback ? knockbackVector(req, config) : null,
     knockbackDecay: config.combat.knockbackDecayTime,
     stateTransition: policy.stateTransition,
     detachSpeed: policy.detachSpeed,
     shake: shakeForHit(req.attackKind, config.hitReaction),
-    energyGain: req.attackerId === 'player' ? energyGainFor(req.attackKind, config) : 0,
+    energyGain:
+      req.attackerId === 'player'
+        ? (req.profile?.energyGain ?? energyGainFor(req.attackKind, config))
+        : 0,
     vibrationMs: victimIsPlayer ? config.action.playerHitVibrationMs : 0,
+    heal: req.profile?.heal ?? 0,
+    dot: req.profile?.dot ?? null,
   };
 }

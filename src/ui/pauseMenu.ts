@@ -1,8 +1,10 @@
+import { CATEGORY_LABELS } from '../domain/attackStyle/actionSpec';
+import { findAttackStyle } from '../domain/attackStyle/attackStyleCatalog';
+import { isStyleImplemented } from '../domain/attackStyle/styleResolver';
 import {
   SENSITIVITY_MAX,
   SENSITIVITY_MIN,
   SENSITIVITY_STEP,
-  type AttackStyle,
   type Quality,
   type Settings,
   type StickMode,
@@ -10,10 +12,20 @@ import {
 import { el, onPress } from './dom';
 
 // S03 ポーズメニュー。設定は変更のたびに onChange で通知し、呼び出し側が保存・反映する。
+// 攻撃スタイルは S05(専用モーダル)で選ぶ。
 export interface PauseMenuCallbacks {
   readonly onChange: (settings: Settings) => void;
   readonly onResume: () => void;
   readonly onTitle: () => void;
+  readonly onOpenStyleSelect: () => void;
+}
+
+/** S03 の攻撃スタイル行に出す表示名: 「格闘(剣術)」。未実装なら「未実装」を添える */
+export function styleRowLabel(id: string): string {
+  const style = findAttackStyle(id);
+  if (!style) return `${id}(未実装)`;
+  const base = `${style.name}(${CATEGORY_LABELS[style.category]})`;
+  return isStyleImplemented(style) ? base : `${base} 未実装`;
 }
 
 export class PauseMenu {
@@ -21,6 +33,7 @@ export class PauseMenu {
   private settings: Settings;
   private readonly sensitivity: HTMLInputElement;
   private readonly sensitivityValue: HTMLElement;
+  private styleLabel!: HTMLElement;
   private readonly segments = new Map<string, HTMLButtonElement[]>();
 
   constructor(
@@ -72,15 +85,7 @@ export class PauseMenu {
         ],
         initial.stickMode,
       ),
-      this.segmentRow<AttackStyle>(
-        '攻撃スタイル',
-        'attackStyle',
-        [
-          ['melee', '格闘'],
-          ['gun', '銃撃'],
-        ],
-        initial.attackStyle,
-      ),
+      this.styleRow(initial.attackStyle),
       this.segmentRow<Quality>(
         '表示品質',
         'quality',
@@ -108,6 +113,23 @@ export class PauseMenu {
   private commit(next: Settings): void {
     this.settings = next;
     this.callbacks.onChange(next);
+  }
+
+  private styleRow(id: string): HTMLElement {
+    const row = el('div', 'setting-row');
+    const button = el('button', 'style-open-btn');
+    button.dataset.testid = 'setting-attackStyle';
+    this.styleLabel = el('span', 'style-open-label', styleRowLabel(id));
+    button.append(this.styleLabel, el('span', 'style-open-arrow', '変更 ›'));
+    onPress(button, () => this.callbacks.onOpenStyleSelect());
+    row.append(el('span', '', '攻撃スタイル'), button);
+    return row;
+  }
+
+  /** S05 で選んだスタイルを行に反映する(保存は呼び出し側が applySettings で行う)。 */
+  setAttackStyle(id: string): void {
+    this.settings = { ...this.settings, attackStyle: id };
+    this.styleLabel.textContent = styleRowLabel(id);
   }
 
   private toggleRow(

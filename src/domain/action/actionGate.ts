@@ -36,7 +36,8 @@ export function attackEnabled(ctx: ActionGateContext): boolean {
     isGroundLocomotion(ctx.playerState) ||
     AIRBORNE.includes(ctx.playerState) ||
     ctx.playerState === 'shoot' ||
-    ctx.playerState === 'charge'
+    ctx.playerState === 'charge' ||
+    ctx.playerState === 'throw'
   );
 }
 

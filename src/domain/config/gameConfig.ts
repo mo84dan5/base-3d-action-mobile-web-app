@@ -275,6 +275,11 @@ export interface HitReactionConfig {
     readonly chargedShotWeak: HitstopSteps;
     /** タメ 0.5 秒以上 */
     readonly chargedShotStrong: HitstopSteps;
+    /** スタイル定義(F11)のヒット区分 light / medium / heavy / huge */
+    readonly light: HitstopSteps;
+    readonly medium: HitstopSteps;
+    readonly heavy: HitstopSteps;
+    readonly huge: HitstopSteps;
   };
   /** 1 回の攻撃で攻撃側に掛かる合計の上限(ステップ) */
   readonly attackerHitstopCapSteps: number;
@@ -296,6 +301,10 @@ export interface HitReactionConfig {
       readonly steps: number;
       readonly maxSteps: number;
     };
+    /** スタイル定義のヒット区分。light はシェイクなし */
+    readonly medium: ShakeSpec;
+    readonly heavy: ShakeSpec;
+    readonly huge: ShakeSpec;
   };
   readonly shakeMaxAmplitude: number;
   readonly shakeMaxSteps: number;
@@ -531,6 +540,10 @@ export const defaultConfig: GameConfig = {
       shoot: { attacker: 2, victim: 2 },
       chargedShotWeak: { attacker: 4, victim: 4 },
       chargedShotStrong: { attacker: 6, victim: 6 },
+      light: { attacker: 3, victim: 3 },
+      medium: { attacker: 5, victim: 5 },
+      heavy: { attacker: 6, victim: 6 },
+      huge: { attacker: 8, victim: 8 },
     },
     attackerHitstopCapSteps: 10,
     flashSteps: 6,
@@ -545,6 +558,9 @@ export const defaultConfig: GameConfig = {
       landing: { amplitude: 0.04, steps: 6 },
       strongAttack: { amplitude: 0.08, steps: 9 },
       chargedShot: { base: 0.04, bonus: 0.08, steps: 9, maxSteps: 12 },
+      medium: { amplitude: 0.05, steps: 7 },
+      heavy: { amplitude: 0.08, steps: 9 },
+      huge: { amplitude: 0.12, steps: 12 },
     },
     shakeMaxAmplitude: 0.2,
     shakeMaxSteps: 30,

@@ -22,6 +22,8 @@ export function applyPlayerHit(
         stateTime: 0,
         velocity: ZERO3,
         attack: null,
+        strong: null,
+        action: null,
         climb: null,
         pendingHit: null,
         hitstopSteps: requestHitstop(player.hitstopSteps, resolution.hitstop.victim),
@@ -69,6 +71,7 @@ export function releasePendingPlayerHit(player: PlayerState): {
     case 'hitState': {
       const events: PlayerEvent[] = [{ type: 'stunned' }];
       if (player.name === 'charge') events.push({ type: 'chargeCancelled' });
+      if (player.name === 'guard') events.push({ type: 'guardEnded', reason: 'hit' });
       return {
         player: {
           ...base,
@@ -78,6 +81,7 @@ export function releasePendingPlayerHit(player: PlayerState): {
           velocity: ZERO3,
           attack: null,
           strong: null,
+          action: null,
           chargeTime: 0,
           climb: null,
           lastAttackStage: 0,

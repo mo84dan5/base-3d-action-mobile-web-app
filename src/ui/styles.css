@@ -861,3 +861,174 @@ button {
   flex-direction: column;
   width: 100%;
 }
+
+/* ---- 攻撃スタイル表示(S02 / F11) ---- */
+.style-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.style-name {
+  font-weight: 800;
+}
+
+.style-sub {
+  opacity: 0.9;
+}
+
+.beat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--cyan);
+  background: transparent;
+}
+
+.beat-dot.on {
+  background: var(--cyan);
+}
+
+/* ---- S03 の攻撃スタイル行 ---- */
+.style-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+}
+
+.style-open-arrow {
+  color: var(--cyan);
+  font-weight: 800;
+}
+
+/* ---- S05 攻撃スタイル選択モーダル ---- */
+.style-screen {
+  z-index: 41;
+}
+
+.style-dialog {
+  width: min(760px, 90%);
+}
+
+.style-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px 16px 8px;
+  overflow-x: auto;
+  touch-action: pan-x;
+  flex: none;
+}
+
+.style-tab {
+  flex: none;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.style-tab.on {
+  background: var(--cyan);
+  color: #06202c;
+  font-weight: 800;
+}
+
+.style-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+:root[data-orientation='portrait'] .style-body {
+  grid-template-columns: 1fr;
+}
+
+.style-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  align-content: start;
+}
+
+.style-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  text-align: left;
+}
+
+.style-item.on {
+  background: var(--cyan);
+  color: #06202c;
+}
+
+.style-item-name {
+  font-weight: 800;
+}
+
+.style-item-tag {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.style-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 14px;
+}
+
+.style-detail-name {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.style-detail-cat {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.style-detail-desc {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.style-detail-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 8px;
+}
+
+.style-detail-label {
+  opacity: 0.8;
+}
+
+.style-detail-note {
+  color: var(--yellow, #ffd166);
+  font-weight: 800;
+}

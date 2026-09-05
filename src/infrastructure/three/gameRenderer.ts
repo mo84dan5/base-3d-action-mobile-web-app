@@ -12,6 +12,7 @@ import {
 import { qualityPreset, type Quality } from '../../domain/settings/settings';
 import type { StageLayout } from '../../domain/stage/stageLayout';
 import { buildStageGeometry, type StageGeometry } from './stageGeometry';
+import { StyleVisuals } from './styleVisuals';
 import { VfxPlayer } from './vfxPlayer';
 
 // Three.js による描画(F06 表示品質、F07、F09 手順 4、デザインディレクション)。
@@ -45,6 +46,7 @@ export class GameRenderer implements ScreenProjector {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
   readonly vfx: VfxPlayer;
+  readonly styleVisuals: StyleVisuals;
   private readonly light: THREE.DirectionalLight;
   private readonly stage: StageGeometry;
   private readonly player: CharacterVisual;
@@ -115,6 +117,8 @@ export class GameRenderer implements ScreenProjector {
 
     this.vfx = new VfxPlayer(config, quality, this.playerGeometry);
     this.scene.add(this.vfx.group);
+    this.styleVisuals = new StyleVisuals(config.physics.playerCapsuleHeight);
+    this.scene.add(this.styleVisuals.group);
     this.applyQuality(quality);
   }
 
@@ -224,6 +228,7 @@ export class GameRenderer implements ScreenProjector {
     this.camera.position.copy(camPos);
     this.camera.lookAt(look);
     this.vfx.syncWithView(curr);
+    this.styleVisuals.sync(curr, 1 / 60);
     const dim = this.vfx.sceneDim();
     const desat = curr.player.defeatProgress;
     this.canvas.style.filter =

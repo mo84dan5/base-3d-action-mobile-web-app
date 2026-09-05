@@ -35,6 +35,7 @@ import { BvhTerrainCollider } from '../infrastructure/three/bvhTerrainCollider';
 import { GameRenderer } from '../infrastructure/three/gameRenderer';
 import { Hud } from '../ui/hud';
 import { PauseMenu } from '../ui/pauseMenu';
+import { StyleSelectModal } from '../ui/styleSelectModal';
 import { ResultScreen } from '../ui/resultScreen';
 import { TitleScreen } from '../ui/titleScreen';
 
@@ -67,6 +68,7 @@ export class GameApp {
   private readonly title: TitleScreen;
   private readonly hud: Hud;
   private readonly pause: PauseMenu;
+  private readonly styleSelect: StyleSelectModal;
   private readonly result: ResultScreen;
   private pointer: PointerInputAdapter | null = null;
   private keyboard: KeyboardInputAdapter | null = null;
@@ -89,6 +91,14 @@ export class GameApp {
       onChange: (s) => this.applySettings(s),
       onResume: () => this.dispatch({ type: 'resumePressed' }),
       onTitle: () => this.dispatch({ type: 'titlePressed' }),
+      onOpenStyleSelect: () => this.styleSelect.show(),
+    });
+    this.styleSelect = new StyleSelectModal(this.settings.attackStyle, {
+      onSelect: (id) => {
+        this.applySettings({ ...this.settings, attackStyle: id });
+        this.pause.setAttackStyle(id);
+      },
+      onClose: () => this.styleSelect.hide(),
     });
     this.result = new ResultScreen(
       () => this.dispatch({ type: 'retryPressed' }),
@@ -96,8 +106,16 @@ export class GameApp {
     );
     this.hud.el.hidden = true;
     this.pause.el.hidden = true;
+    this.styleSelect.el.hidden = true;
     this.result.el.hidden = true;
-    root.append(this.canvas, this.hud.el, this.pause.el, this.result.el, this.title.el);
+    root.append(
+      this.canvas,
+      this.hud.el,
+      this.pause.el,
+      this.styleSelect.el,
+      this.result.el,
+      this.title.el,
+    );
   }
 
   start(): void {
@@ -138,6 +156,14 @@ export class GameApp {
         holdStarted: this.buttons.get('attack').hasHoldStarted(),
         enabled: this.buttons.get('attack').isEnabled(),
       }),
+      /** E2E 用: エネルギーを直接与える(エネルギーを使うスタイルの確認) */
+      grantEnergy: (amount: number) => {
+        if (!this.session) return;
+        this.session.energy = {
+          ...this.session.energy,
+          value: Math.min(this.session.energy.max, this.session.energy.value + amount),
+        };
+      },
     };
     (window as unknown as { __b3dDebug: typeof hook }).__b3dDebug = hook;
   }
@@ -226,7 +252,10 @@ export class GameApp {
     else this.title.hide();
     this.hud.el.hidden = s === 'title';
     if (s === 'pause') this.pause.show();
-    else this.pause.hide();
+    else {
+      this.pause.hide();
+      this.styleSelect.hide();
+    }
     if (s === 'result' && this.session?.result)
       this.result.show(this.session.result, this.session.stats);
     else this.result.hide();

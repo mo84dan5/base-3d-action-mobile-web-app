@@ -46,6 +46,18 @@ export interface EnemyState {
   readonly grounded: boolean;
   /** ヒットストップ終了後に適用する硬直・ノックバック */
   readonly pending: PendingReaction | null;
+  /** 時間停止の残り秒(F11 N10。エンティティ時間 0) */
+  readonly frozenRemaining: number;
+  /** 拘束(引き寄せ・掴み)の残り秒。AI と移動を止める */
+  readonly heldRemaining: number;
+  /** 挑発の残り秒。追跡を強制する */
+  readonly tauntRemaining: number;
+  /** 継続ダメージ(F11 N8) */
+  readonly dot: {
+    readonly perSecond: number;
+    readonly remaining: number;
+    readonly accumulated: number;
+  } | null;
 }
 
 export function createEnemy(
@@ -79,6 +91,10 @@ export function createEnemy(
     deathTime: 0,
     grounded: true,
     pending: null,
+    frozenRemaining: 0,
+    heldRemaining: 0,
+    tauntRemaining: 0,
+    dot: null,
   };
 }
 
@@ -197,4 +213,40 @@ export function currentKnockback(enemy: EnemyState): Vec3 {
   if (enemy.knockbackRemaining <= 0 || enemy.knockbackDecay <= 0) return ZERO3;
   const k = enemy.knockbackRemaining / enemy.knockbackDecay;
   return { x: enemy.knockback.x * k, y: 0, z: enemy.knockback.z * k };
+}
+
+/** 継続ダメージを付与する(同じ敵には強い方・長い方で上書き)。 */
+export function applyDot(enemy: EnemyState, perSecond: number, duration: number): EnemyState {
+  const current = enemy.dot;
+  if (current && current.perSecond >= perSecond && current.remaining >= duration) return enemy;
+  return { ...enemy, dot: { perSecond, remaining: duration, accumulated: 0 } };
+}
+
+/** 継続ダメージを dt 進め、整数になったぶんのダメージを返す。 */
+export function tickDot(enemy: EnemyState, dt: number): { enemy: EnemyState; damage: number } {
+  const dot = enemy.dot;
+  if (!dot || enemy.hp <= 0) return { enemy, damage: 0 };
+  const remaining = Math.max(0, dot.remaining - dt);
+  const accumulated = dot.accumulated + dot.perSecond * Math.min(dt, dot.remaining);
+  const damage = Math.floor(accumulated);
+  const next = remaining <= 0 ? null : { ...dot, remaining, accumulated: accumulated - damage };
+  return { enemy: { ...enemy, dot: next, hp: Math.max(0, enemy.hp - damage) }, damage };
+}
+
+/** 硬直を直接与える(パリィ成功の転倒・音波)。 */
+export function stunEnemy(enemy: EnemyState, seconds: number): EnemyState {
+  if (!isTargetable(enemy) || seconds <= 0) return enemy;
+  return {
+    ...enemy,
+    ai: 'stunned',
+    stateTime: 0,
+    stunRemaining: Math.max(enemy.stunRemaining, seconds),
+    velocity: ZERO3,
+    attackHitDone: true,
+  };
+}
+
+/** 1 ステップだけ外力で動かす(引き寄せ・重力球)。物理側がコリジョン付きで適用する。 */
+export function pushEnemy(enemy: EnemyState, velocity: Vec3, dt: number): EnemyState {
+  return { ...enemy, knockback: velocity, knockbackRemaining: dt, knockbackDecay: dt };
 }

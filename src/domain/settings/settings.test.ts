@@ -142,13 +142,19 @@ describe('qualityPreset(F06 表示品質プリセット)', () => {
   });
 });
 
-describe('attackStyle(F06)', () => {
-  it('キーが無い旧データでは格闘(melee)、"gun" は銃撃、不正な値は格闘', () => {
+describe('attackStyle(F06 / F11)', () => {
+  it('キーが無い旧データでは格闘(melee)、"gun" は銃撃、F11 の ID はそのまま、未知の値は格闘', () => {
     expect(parseSettings(JSON.stringify({ version: 1 })).attackStyle).toBe('melee');
     expect(parseSettings(JSON.stringify({ version: 1, attackStyle: 'gun' })).attackStyle).toBe(
       'gun',
     );
     expect(parseSettings(JSON.stringify({ version: 1, attackStyle: 'laser' })).attackStyle).toBe(
+      'laser',
+    );
+    expect(
+      parseSettings(JSON.stringify({ version: 1, attackStyle: 'no_such_style' })).attackStyle,
+    ).toBe('melee');
+    expect(parseSettings(JSON.stringify({ version: 1, attackStyle: 42 })).attackStyle).toBe(
       'melee',
     );
   });

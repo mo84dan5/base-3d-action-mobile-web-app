@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest';
+import { findAttackStyle } from '../attackStyle/attackStyleCatalog';
 import { vec3 } from '../math/vec3';
 import type { PlayerEvent } from './playerEvents';
 import { NO_INPUT, cancelCharge, type PlayerStepInput } from './playerStep';
 import { DT, Sim, forward, wallBox } from './testHarness';
 
+const GUN_STYLE = findAttackStyle('gun');
+if (!GUN_STYLE) throw new Error('gun style missing');
 const gun = (extra: Partial<PlayerStepInput> = {}): PlayerStepInput => ({
   ...NO_INPUT,
-  attackStyle: 'gun',
+  style: GUN_STYLE,
   ...extra,
 });
 const melee = (extra: Partial<PlayerStepInput> = {}): PlayerStepInput => ({
   ...NO_INPUT,
-  attackStyle: 'melee',
   ...extra,
 });
 const shots = (events: PlayerEvent[]) => events.filter((e) => e.type === 'shotFired');
@@ -19,7 +21,7 @@ const shots = (events: PlayerEvent[]) => events.filter((e) => e.type === 'shotFi
 describe('接近強攻撃(格闘・長押し。F04)', () => {
   it('HoldStart で発動し、スタミナが 25 減り、目標の手前 1.0 m まで 9.0 m/s で踏み込んでから 35 ダメージ・半径 1.5 m の判定が出る', () => {
     const s = new Sim();
-    s.step(melee({ attackHoldStart: true, strongTarget: { yaw: 0, distance: 3.0 } }));
+    s.step(melee({ attackHoldStart: true, findTarget: () => ({ id: 1, yaw: 0, distance: 3.0 }) }));
     expect(s.player.name).toBe('strongAttack');
     expect(s.player.strong?.phase).toBe('lunge');
     expect(s.player.stamina.value).toBe(75);
@@ -79,7 +81,7 @@ describe('接近強攻撃(格闘・長押し。F04)', () => {
 describe('射撃(銃撃・押下。F04)', () => {
   it('押下で射撃になり、発生 0.05 秒で射程 12 m・8 ダメージのヒットスキャンが出て、全体 0.25 秒で Idle に戻る', () => {
     const s = new Sim();
-    s.step(gun({ attack: true, shootTarget: { yaw: 0.3 } }));
+    s.step(gun({ attack: true, findTargets: () => [{ id: 1, yaw: 0.3, distance: 5 }] }));
     expect(s.player.name).toBe('shoot');
     expect(s.player.yaw).toBeCloseTo(0.3);
     let steps = 0;

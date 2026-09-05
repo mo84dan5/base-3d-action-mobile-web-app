@@ -38,6 +38,11 @@ export class Hud {
   private staminaRow!: HTMLElement;
   private readonly staminaFill: HTMLElement;
   private readonly fpsEl: HTMLElement;
+  private readonly styleName: HTMLElement;
+  private readonly styleSub: HTMLElement;
+  private readonly beatDot: HTMLElement;
+  private lastStyleText = '';
+  private lastStyleSub = '';
   private readonly countdown: HTMLElement;
   private readonly indicator: HTMLElement;
   private readonly interactMessage: HTMLElement;
@@ -84,7 +89,17 @@ export class Hud {
     this.staminaFill = el('div', 'bar-fill');
     this.staminaBar.append(this.staminaFill);
     stRow.append(el('span', 'bar-label lead', 'ST'), this.staminaBar);
-    bars.append(hpRow, stRow);
+    // 攻撃スタイル(F11): 名称と、残弾 / ヒット数 / 拍などの補助表示
+    const styleRow = el('div', 'style-row');
+    styleRow.dataset.testid = 'style-row';
+    this.styleName = el('span', 'style-name', '');
+    this.styleName.dataset.testid = 'style-name';
+    this.styleSub = el('span', 'style-sub', '');
+    this.styleSub.dataset.testid = 'style-sub';
+    this.beatDot = el('span', 'beat-dot');
+    this.beatDot.hidden = true;
+    styleRow.append(this.styleName, this.styleSub, this.beatDot);
+    bars.append(hpRow, stRow, styleRow);
     const right = el('div', 'hud-top-right');
     this.fpsEl = el('div', 'fps');
     this.fpsEl.hidden = true;
@@ -309,7 +324,34 @@ export class Hud {
     }
   }
 
+  private updateStyle(view: ViewState): void {
+    const style = view.hud.style;
+    const text = style.fallbackFrom ? `${style.name}(${style.fallbackFrom} は未実装)` : style.name;
+    if (text !== this.lastStyleText) {
+      this.styleName.textContent = text;
+      this.lastStyleText = text;
+    }
+    const parts: string[] = [];
+    if (style.rolledName) parts.push(`→ ${style.rolledName}`);
+    if (style.ammo) {
+      parts.push(
+        style.ammo.reloading ? 'リロード中' : `残弾 ${style.ammo.remaining}/${style.ammo.capacity}`,
+      );
+    }
+    if (style.hitCount !== null) parts.push(`HIT ${style.hitCount}`);
+    if (style.guarding) parts.push('ガード');
+    const sub = parts.join('  ');
+    if (sub !== this.lastStyleSub) {
+      this.styleSub.textContent = sub;
+      this.lastStyleSub = sub;
+    }
+    const beat = style.beat;
+    this.beatDot.hidden = beat === null;
+    if (beat !== null) this.beatDot.classList.toggle('on', beat < 0.2 || beat > 0.8);
+  }
+
   private updateOverlays(view: ViewState): void {
+    this.updateStyle(view);
     const label = view.hud.countdownLabel;
     if (label !== this.lastCountdown) {
       this.countdown.replaceChildren();

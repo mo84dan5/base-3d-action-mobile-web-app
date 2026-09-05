@@ -128,6 +128,29 @@ export function nearestTargetInCone(
   return best;
 }
 
+/** 円錐内の敵を近い順に最大 max 体(複数ロック用)。 */
+export function nearestTargetsInCone(
+  playerFeet: Vec3,
+  playerYaw: number,
+  enemies: readonly TargetCandidate[],
+  halfAngleDeg: number,
+  range: number,
+  max: number,
+): ConeTarget[] {
+  const halfAngle = degToRad(halfAngleDeg);
+  const found: ConeTarget[] = [];
+  for (const enemy of enemies) {
+    if (enemy.hp <= 0) continue;
+    const toEnemy = horizontal(sub(enemy.feet, playerFeet));
+    const dist = Math.hypot(toEnemy.x, toEnemy.z);
+    if (dist === 0 || dist > range) continue;
+    const yaw = yawFromDirection(toEnemy);
+    if (Math.abs(wrapAngle(yaw - playerYaw)) > halfAngle) continue;
+    found.push({ id: enemy.id, yaw, distance: dist });
+  }
+  return found.sort((a, b) => a.distance - b.distance).slice(0, max);
+}
+
 /**
  * レイ(原点 origin、単位方向 dir、長さ maxDistance)とカプセルの交差距離。交差しなければ null。
  * レイ上の点からカプセル内部の線分への距離が半径以下になる最小の t を、粗い探索の後に二分で求める(ヒットスキャン用)。

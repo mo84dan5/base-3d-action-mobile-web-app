@@ -36,7 +36,14 @@ describe('slashOrientation', () => {
 describe('VfxPlayer の斬撃', () => {
   it('攻撃の振りで斬撃メッシュがプレイヤー中心の高さに置かれ、正面を向く板にならない', () => {
     const vfx = new VfxPlayer(defaultConfig, 'medium', new THREE.CapsuleGeometry(0.4, 0.9));
-    vfx.trigger({ kind: 'attackSwing', attack: 'normal3', position: { x: 2, y: 0, z: 3 }, yaw: 0 });
+    vfx.trigger({
+      kind: 'attackSwing',
+      attack: 'normal3',
+      position: { x: 2, y: 0, z: 3 },
+      yaw: 0,
+      action: 'combo',
+      styleId: 'melee',
+    });
     const mesh = vfx.group.getObjectByName('vfx_normal3_slash_1.6') as THREE.Mesh | undefined;
     expect(mesh).toBeDefined();
     if (!mesh) return;
