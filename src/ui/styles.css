@@ -1032,3 +1032,7 @@ button {
   color: var(--yellow, #ffd166);
   font-weight: 800;
 }
+
+.style-dialog .dialog-foot {
+  justify-content: flex-end;
+}

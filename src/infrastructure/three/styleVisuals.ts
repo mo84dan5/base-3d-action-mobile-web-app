@@ -224,7 +224,7 @@ export class StyleVisuals {
         root.name = `vfx_placed_${o.object}`;
         const color = CATEGORY_COLORS[categoryOf(o.styleId)];
         root.add(this.placedBody(o.object, o.radius, color));
-        const ring = this.lifeRing(o.radius);
+        const ring = this.lifeRing(Math.min(o.radius, 2.5));
         ring.name = 'vfx_life_ring';
         root.add(ring);
         v = { root, ring };
@@ -233,7 +233,8 @@ export class StyleVisuals {
       }
       v.root.position.set(o.position.x, o.position.y, o.position.z);
       v.root.rotation.set(0, o.yaw, 0);
-      if (v.ring) v.ring.scale.setScalar(Math.max(0.05, o.radius * (1 - o.progress)));
+      if (v.ring)
+        v.ring.scale.setScalar(Math.max(0.05, Math.min(o.radius, 2.5) * (1 - o.progress)));
       const body = v.root.children[0];
       if (body && o.object === 'meteor') body.position.y = 6 * (1 - o.progress);
       if (body && o.object === 'gravity') body.rotation.y = this.time * 2;

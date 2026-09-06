@@ -1503,6 +1503,7 @@ export const ATTACK_STYLES: readonly AttackStyleDefinition[] = [
     category: 'placement',
     description: 'タレットを設置。長押しで連射強化',
     press: placed('turret', {
+      forward: 1.2,
       radius: 8,
       damage: 6,
       interval: 1.0,
