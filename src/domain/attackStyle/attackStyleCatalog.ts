@@ -524,7 +524,7 @@ export const ATTACK_STYLES: readonly AttackStyleDefinition[] = [
       knockback: 2.0,
       hitClass: 'light',
     }),
-    hold: holdStart(multihit(10, 0.2, 5, { shape: fan(1.6, 150) })),
+    hold: holdStart(multihit(10, 0.2, 5, { shape: ring(1.6, 1.6) })),
     cost: { press: NONE, hold: stamina(15) },
     mechanisms: ['A5', 'N2'],
     scale: 'M',
@@ -1885,8 +1885,9 @@ export const ATTACK_STYLES: readonly AttackStyleDefinition[] = [
     category: 'movement',
     description: '斬撃 2 段。ダッシュ直後の長押しで突進斬り',
     press: combo([stage(10, 0.1, 0.1, 0.4), stage(12, 0.12, 0.12, 0.5)]),
+    // ダッシュ直後 0.3 秒以内なら即座に突進斬り。それ以外は長押しでダッシュ(スタミナ 18)を挟む
     hold: holdStart(
-      movement('dashSlash', 'dash', {
+      movement('dashSlash', 'any', {
         distance: 3.0,
         speed: 10,
         then: lunge(35, {

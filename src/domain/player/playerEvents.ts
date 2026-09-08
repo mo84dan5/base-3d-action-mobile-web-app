@@ -148,7 +148,8 @@ export type PlayerEvent =
   | { readonly type: 'styleRolled'; readonly styleId: string }
   | {
       readonly type: 'actionRejected';
-      readonly reason: 'cost' | 'requirement' | 'ammo' | 'hp';
+      /** cost: スタミナ / HP 不足、energy: エネルギー不足(HUD の EN バーを点滅させる) */
+      readonly reason: 'cost' | 'energy' | 'requirement' | 'ammo' | 'hp';
     }
   | { readonly type: 'reloadStarted'; readonly seconds: number }
   | { readonly type: 'chargeStarted' }

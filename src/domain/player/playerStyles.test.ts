@@ -97,15 +97,40 @@ describe('移動連動(F11 N7)の発動条件', () => {
     return found;
   };
 
-  it('dash_slash: ダッシュ中の長押しで突進斬りが出る。地上で何もしていなければ出ない', () => {
+  it('dash_slash: ダッシュ直後の長押しはダッシュを省略して即座に突進斬りになる', () => {
     const s = new Sim();
-    s.step(withStyle(style('dash_slash'), { attackHoldStart: true }));
-    expect(s.player.name).toBe('idle');
     s.step(withStyle(style('dash_slash'), { dash: true }));
     expect(s.player.name).toBe('dash');
+    const afterDash = s.player.stamina.value;
     s.step(withStyle(style('dash_slash'), { attackHoldStart: true }));
     expect(s.player.name).toBe('strongAttack');
     expect(s.has('maneuverStarted')).toBe(true);
+    // 長押しのコスト 15 だけ。ダッシュ分 18 は二重に払わない
+    expect(afterDash - s.player.stamina.value).toBeCloseTo(15, 5);
+  });
+
+  it('dash_slash: ダッシュしていなければ長押しでダッシュ(スタミナ 18)を挟み、3 m 進んでから突進斬りになる', () => {
+    const s = new Sim();
+    const before = s.player.stamina.value;
+    s.step(withStyle(style('dash_slash'), { attackHoldStart: true }));
+    expect(s.player.name).toBe('maneuver');
+    expect(s.has('dashStarted')).toBe(true);
+    expect(s.has('maneuverStarted')).toBe(true);
+    s.until((p) => p.name === 'strongAttack', withStyle(style('dash_slash')), 1);
+    expect(s.player.name).toBe('strongAttack');
+    const travelled = Math.hypot(s.player.position.x, s.player.position.z);
+    expect(travelled).toBeGreaterThanOrEqual(2.9);
+    expect(travelled).toBeLessThanOrEqual(3.6);
+    expect(before - s.player.stamina.value).toBeCloseTo(18 + 15, 5);
+  });
+
+  it('dash_slash: 空中では長押しがダッシュを挟めず拒否される', () => {
+    const s = new Sim();
+    s.step(withStyle(style('dash_slash'), { jump: true }));
+    s.run(0.2, withStyle(style('dash_slash')));
+    s.step(withStyle(style('dash_slash'), { attackHoldStart: true }));
+    expect(s.player.name).not.toBe('maneuver');
+    expect(s.has('actionRejected')).toBe(true);
   });
 
   it('dive: 空中で長押しすると急降下し、着地で範囲攻撃が出る', () => {
@@ -538,11 +563,12 @@ describe('スタイル固有の挙動(F11)', () => {
     expect(buff?.type === 'buffStarted' && buff.radius).toBe(5);
   });
 
-  it('エネルギー不足の行動は発動せず actionRejected(cost)になる', () => {
+  it('エネルギー不足の行動は発動せず actionRejected(energy)になる(EN バーの点滅用に cost と区別)', () => {
     const s = new Sim();
     s.step(withStyle(style('magic_bolt'), { attack: true, energy: 0 }));
     expect(s.player.name).toBe('idle');
-    expect(s.events.some((e) => e.type === 'actionRejected' && e.reason === 'cost')).toBe(true);
+    expect(s.events.some((e) => e.type === 'actionRejected' && e.reason === 'energy')).toBe(true);
+    expect(s.events.some((e) => e.type === 'actionRejected' && e.reason === 'cost')).toBe(false);
   });
 
   it('エネルギーを消費する行動は energySpent を出す', () => {

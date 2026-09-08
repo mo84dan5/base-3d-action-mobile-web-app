@@ -15,6 +15,8 @@ export interface PlayerView {
   readonly position: Vec3;
   readonly yaw: number;
   readonly state: PlayerStateName;
+  /** 回転攻撃の表示用回転速度(rad/s)。0 は回さない。表示の yaw に加算する */
+  readonly spinRate: number;
   readonly climbPhase: ClimbPhase | null;
   readonly velocity: Vec3;
   /** ヒットフラッシュ(赤)の不透明度 0〜0.8 */
@@ -123,6 +125,11 @@ export interface HudView {
   readonly skillCooldownLabel: string;
   readonly energyRatio: number;
   readonly energyFull: boolean;
+  /** エネルギーの現在値 / 最大値(S02 要素 18 の数値表示) */
+  readonly energy: number;
+  readonly energyMax: number;
+  /** エネルギー不足で行動が拒否された直後 0.4 秒間 true(EN バーの点滅) */
+  readonly energyShort: boolean;
   /** 銃撃のタメ率(攻撃ボタンのリング表示用) */
   readonly chargeRatio: number;
   readonly indicator: 'climb' | 'glide' | null;

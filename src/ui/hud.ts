@@ -37,6 +37,9 @@ export class Hud {
   private readonly staminaBar: HTMLElement;
   private staminaRow!: HTMLElement;
   private readonly staminaFill: HTMLElement;
+  private readonly energyBar: HTMLElement;
+  private readonly energyFill: HTMLElement;
+  private readonly energyLabel: HTMLElement;
   private readonly fpsEl: HTMLElement;
   private readonly styleName: HTMLElement;
   private readonly styleSub: HTMLElement;
@@ -89,6 +92,16 @@ export class Hud {
     this.staminaFill = el('div', 'bar-fill');
     this.staminaBar.append(this.staminaFill);
     stRow.append(el('span', 'bar-label lead', 'ST'), this.staminaBar);
+    // エネルギーバー(S02 要素 18)。バーストのリングだけでは蓄積・消費がわかりにくいため常時表示する
+    const enRow = el('div', 'bar-row en');
+    enRow.dataset.testid = 'energy-row';
+    this.energyBar = el('div', 'bar energy');
+    this.energyBar.dataset.testid = 'energy-bar';
+    this.energyFill = el('div', 'bar-fill');
+    this.energyBar.append(this.energyFill);
+    this.energyLabel = el('span', 'bar-label value', '0/100');
+    this.energyLabel.dataset.testid = 'energy-label';
+    enRow.append(el('span', 'bar-label lead', 'EN'), this.energyBar, this.energyLabel);
     // 攻撃スタイル(F11): 名称と、残弾 / ヒット数 / 拍などの補助表示
     const styleRow = el('div', 'style-row');
     styleRow.dataset.testid = 'style-row';
@@ -99,7 +112,7 @@ export class Hud {
     this.beatDot = el('span', 'beat-dot');
     this.beatDot.hidden = true;
     styleRow.append(this.styleName, this.styleSub, this.beatDot);
-    bars.append(hpRow, stRow, styleRow);
+    bars.append(hpRow, stRow, enRow, styleRow);
     const right = el('div', 'hud-top-right');
     this.fpsEl = el('div', 'fps');
     this.fpsEl.hidden = true;
@@ -273,6 +286,13 @@ export class Hud {
     this.staminaBar.classList.toggle('low', p.staminaLow && p.stamina > 0);
     this.staminaBar.classList.toggle('empty', p.stamina <= 0);
     this.lastStamina = p.stamina;
+
+    const hud = view.hud;
+    this.energyFill.style.transform = `scaleX(${hud.energyRatio})`;
+    this.energyBar.classList.toggle('full', hud.energyFull);
+    this.energyBar.classList.toggle('short', hud.energyShort);
+    const energyText = `${Math.floor(hud.energy)}/${hud.energyMax}`;
+    if (this.energyLabel.textContent !== energyText) this.energyLabel.textContent = energyText;
   }
 
   private updateButtons(view: ViewState): void {

@@ -735,4 +735,14 @@ test.describe('HUD のバー表示(S02 要素 2・3)', () => {
     expect(st).not.toBeNull();
     if (st) expect(st.width).toBeGreaterThanOrEqual(120);
   });
+
+  test('エネルギーバー(要素 18)が常時表示され、現在値/最大値を併記する', async ({ page }) => {
+    await startGame(page);
+    await expect(page.getByTestId('energy-row')).toBeVisible();
+    await expect(page.getByTestId('energy-bar')).toBeVisible();
+    await expect(page.getByTestId('energy-label')).toHaveText(/^\d+\/100$/);
+    const en = await page.getByTestId('energy-bar').boundingBox();
+    expect(en).not.toBeNull();
+    if (en) expect(en.width).toBeGreaterThanOrEqual(120);
+  });
 });

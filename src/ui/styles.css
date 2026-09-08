@@ -294,6 +294,32 @@ button {
   animation: none;
 }
 
+/* エネルギーバー(S02 要素 18)。色はバーストのアクセント(マゼンタ)に合わせる */
+.bar-row.en {
+  min-height: 10px;
+}
+
+.bar.energy {
+  height: 10px;
+}
+
+.bar.energy .bar-fill {
+  background: #ff3d81;
+}
+
+.bar.energy.full {
+  box-shadow: 0 0 6px 1px rgba(255, 61, 129, 0.8);
+}
+
+.bar.energy.full .bar-fill {
+  background: #ff8fb8;
+}
+
+.bar.energy.short .bar-fill {
+  background: var(--red);
+  animation: stamina-blink 0.2s ease-in-out 2;
+}
+
 @keyframes stamina-blink {
   0%,
   100% {

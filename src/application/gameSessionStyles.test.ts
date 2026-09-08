@@ -54,6 +54,55 @@ class Harness {
   }
 }
 
+describe('エネルギーバー(S02 要素 18)', () => {
+  it('HUD にエネルギーの現在値 / 最大値が出て、魔力弾で消費すると減る', () => {
+    const h = new Harness({ ...defaultSettings, attackStyle: 'magic_bolt' });
+    h.session.energy = { ...h.session.energy, value: h.session.energy.max };
+    let hud = h.session.view().hud;
+    expect(hud.energy).toBe(100);
+    expect(hud.energyMax).toBe(100);
+    expect(hud.energyFull).toBe(true);
+    expect(hud.energyShort).toBe(false);
+    h.step([{ type: 'AttackPressed' }]);
+    h.run(0.2);
+    hud = h.session.view().hud;
+    expect(hud.energy).toBe(97);
+    expect(hud.energyFull).toBe(false);
+  });
+
+  it('エネルギー不足で発動できないと energyShort が 0.4 秒間 true になり、効果音は rejected_energy', () => {
+    const h = new Harness({ ...defaultSettings, attackStyle: 'magic_bolt' });
+    h.session.energy = { ...h.session.energy, value: 0 };
+    h.step([{ type: 'AttackPressed' }]);
+    expect(h.session.view().hud.energyShort).toBe(true);
+    expect(h.effects.some((e) => e.kind === 'sound' && e.name === 'rejected_energy')).toBe(true);
+    h.run(0.5);
+    expect(h.session.view().hud.energyShort).toBe(false);
+  });
+
+  it('スタミナ切れの拒否は energyShort にならない', () => {
+    const h = new Harness({ ...defaultSettings, attackStyle: 'greatsword' });
+    h.session.player = {
+      ...h.session.player,
+      stamina: { ...h.session.player.stamina, value: 0 },
+    };
+    h.step([{ type: 'AttackHoldStart' }]);
+    expect(h.session.view().hud.energyShort).toBe(false);
+  });
+});
+
+describe('回転攻撃の表示回転(F11)', () => {
+  it('回転斬りの長押し中は spinRate が正で、終わると 0 に戻る', () => {
+    const h = new Harness({ ...defaultSettings, attackStyle: 'spin_slash' });
+    h.step([{ type: 'AttackHoldStart' }]);
+    h.run(0.1, []);
+    expect(h.session.view().player.spinRate).toBeGreaterThan(0);
+    h.step([{ type: 'AttackHoldEnd' }]);
+    h.run(2.0);
+    expect(h.session.view().player.spinRate).toBe(0);
+  });
+});
+
 // 敵に触れないスタイル入力(囮・壁は敵を遮る・引き付けるだけ)
 const NO_DAMAGE_EXPECTED = new Set(['decoy', 'magic_wall']);
 

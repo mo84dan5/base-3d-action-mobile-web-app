@@ -13,7 +13,7 @@ import {
   yawFromDirection,
   type Vec3,
 } from '../../math/vec3';
-import { drainStamina, isStaminaEmpty } from '../../stamina/stamina';
+import { consumeStamina, drainStamina, isStaminaEmpty } from '../../stamina/stamina';
 import { playerCapsule } from '../playerPhysics';
 import type { PlayerState } from '../playerState';
 import {
@@ -62,6 +62,37 @@ export function requirementMet(
     case 'wallNear':
       return p.grounded && ctx.input.wallAhead(1.0);
   }
+}
+
+/**
+ * ダッシュ斬り: ダッシュ直後でなければ、ダッシュ(F01 と同じスタミナ)を挟んで距離を詰めてから
+ * then(突進斬り)へ繋ぐ。move フェーズが距離を進み切ると endManeuver が then を始める。
+ */
+function dashThenStrike(
+  p: PlayerState,
+  ctx: Ctx,
+  spec: MovementSpec,
+  opts: StartActionOptions,
+  dir: Vec3,
+): PlayerState | null {
+  if (!p.grounded) return null;
+  const { config } = ctx;
+  ctx.events.push({ type: 'dashStarted', direction: dir });
+  ctx.events.push({
+    type: 'maneuverStarted',
+    move: spec.move,
+    position: p.position,
+    direction: dir,
+  });
+  const dashed = withStamina(
+    p,
+    ctx,
+    consumeStamina(p.stamina, config.stamina.dashCost, config.stamina),
+  );
+  return {
+    ...enter(withRuntime(dashed, ctx, spec, opts, 'move', dir), 'maneuver'),
+    velocity: ZERO3,
+  };
 }
 
 function sideDirection(p: PlayerState, ctx: Ctx): Vec3 {
@@ -124,6 +155,9 @@ export function startManeuver(
   const { config } = ctx;
   const forward = directionFromYaw(p.yaw);
   const chained = { ...opts, then: spec.then };
+  if (spec.move === 'dashSlash' && !requirementMet(p, ctx, 'dash', spec.windowSeconds)) {
+    return dashThenStrike(p, ctx, spec, chained, forward);
+  }
   switch (spec.move) {
     case 'dodge': {
       const dir = sideDirection(p, ctx);

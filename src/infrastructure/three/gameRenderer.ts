@@ -50,6 +50,8 @@ export class GameRenderer implements ScreenProjector {
   private readonly light: THREE.DirectionalLight;
   private readonly stage: StageGeometry;
   private readonly player: CharacterVisual;
+  /** 回転攻撃の表示用に yaw へ加算する角度(F11。ロジックの yaw は変えない) */
+  private spinAngle = 0;
   private readonly enemies = new Map<number, CharacterVisual>();
   private size: ViewportSize = { width: 1, height: 1 };
   private orientation: Orientation = 'landscape';
@@ -249,7 +251,8 @@ export class GameRenderer implements ScreenProjector {
     const p = curr.player;
     const pos = lerpVec(prev.player.position, p.position, alpha);
     this.player.root.position.copy(pos);
-    this.player.root.rotation.set(0, lerpAngle(prev.player.yaw, p.yaw, alpha), 0);
+    this.spinAngle = p.spinRate > 0 ? (this.spinAngle + p.spinRate / 60) % (Math.PI * 2) : 0;
+    this.player.root.rotation.set(0, lerpAngle(prev.player.yaw, p.yaw, alpha) + this.spinAngle, 0);
     this.player.root.visible = p.visible;
     this.player.body.material.emissive.copy(FLASH_RED).multiplyScalar(p.flashOpacity);
     const tilt = (p.defeatProgress * Math.PI) / 2;

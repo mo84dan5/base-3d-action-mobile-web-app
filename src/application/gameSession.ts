@@ -113,6 +113,7 @@ import {
   stepPlayer,
   type PlayerStepInput,
 } from '../domain/player/playerStep';
+import { spinRateOf } from '../domain/player/playerSpin';
 import type { Settings } from '../domain/settings/settings';
 import type { StageLayout } from '../domain/stage/stageLayout';
 import { isStaminaLow } from '../domain/stamina/stamina';
@@ -160,6 +161,8 @@ export interface GameSessionDeps {
 const SPRINT_DUST_INTERVAL_STEPS = 8;
 const DOT_TICK_SECONDS = 0.5;
 const HOLD_GRACE_STEPS = 2;
+/** エネルギー不足の拒否を EN バーに点滅で知らせる時間(S02 要素 18) */
+const ENERGY_SHORT_SECONDS = 0.4;
 
 export class GameSession implements CombatHost {
   player: PlayerState;
@@ -177,6 +180,8 @@ export class GameSession implements CombatHost {
   damageNumbers: readonly DamageNumber[] = [];
   interactMessage: InteractMessage | null = null;
   worldTime = 0;
+  /** エネルギー不足の拒否を EN バーに点滅で知らせる期限(worldTime) */
+  energyShortUntil = 0;
   private nextDamageNumberId = 1;
   private stick: StickInput = { x: 0, y: 0, magnitude: 0 };
   private sprintSteps = 0;
@@ -477,6 +482,8 @@ export class GameSession implements CombatHost {
         this.rolledStyleId = event.styleId;
         break;
       case 'actionRejected':
+        if (event.reason === 'energy')
+          this.energyShortUntil = this.worldTime + ENERGY_SHORT_SECONDS;
         this.effect({ kind: 'sound', name: `rejected_${event.reason}` });
         break;
       case 'reloadStarted':
@@ -1059,6 +1066,7 @@ export class GameSession implements CombatHost {
       position: p.position,
       yaw: p.yaw,
       state: p.name,
+      spinRate: spinRateOf(p),
       climbPhase: p.climb?.phase ?? null,
       velocity: p.velocity,
       flashOpacity: flashOpacity(this.playerFlash),
@@ -1112,6 +1120,9 @@ export class GameSession implements CombatHost {
       skillCooldownLabel: remainingSecondsLabel(this.skillCooldown),
       energyRatio: energyRatio(this.energy),
       energyFull: isEnergyFull(this.energy),
+      energy: this.energy.value,
+      energyMax: this.energy.max,
+      energyShort: this.worldTime < this.energyShortUntil,
       chargeRatio: this.chargeRatio(),
       indicator: p.name === 'climb' ? 'climb' : p.name === 'glide' ? 'glide' : null,
       interactTargetName: this.interactTarget()?.name ?? null,

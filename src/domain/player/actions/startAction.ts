@@ -183,7 +183,8 @@ export function startAction(
 ): PlayerState | null {
   const payment = canPay(p, ctx, opts.cost);
   if (!payment.ok) {
-    ctx.events.push({ type: 'actionRejected', reason: 'cost' });
+    const energy = opts.cost?.type === 'energy' || opts.cost?.type === 'energyPerSecond';
+    ctx.events.push({ type: 'actionRejected', reason: energy ? 'energy' : 'cost' });
     return null;
   }
   const mark = ctx.events.length;
