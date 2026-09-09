@@ -141,23 +141,7 @@ describe('空中攻撃(F04)', () => {
   });
 });
 
-describe('スキル・バースト(F04)', () => {
-  it('スキルは発生 0.2 秒後に半径 2.5 m・30 ダメージの判定が出て、全体 0.7 秒で終わる', () => {
-    const s = new Sim();
-    s.step({ ...NO_INPUT, skill: true });
-    expect(s.player.name).toBe('skill');
-    let steps = 0;
-    while (s.player.name === 'skill') {
-      s.step();
-      steps++;
-    }
-    expect(steps * DT).toBeCloseTo(0.7, 1);
-    const active = activeEvents(s.events)[0];
-    if (active?.type !== 'attackActive') throw new Error('unreachable');
-    expect(active.radius).toBe(2.5);
-    expect(active.damage).toBe(30);
-    expect(active.kind).toBe('skill');
-  });
+describe('バースト(F04。固定スキルは F12 で廃止)', () => {
   it('バーストは半径 4.0 m・80 ダメージ、全体 1.2 秒で無敵(hitCategory = burst)', () => {
     const s = new Sim();
     s.step({ ...NO_INPUT, burst: true });

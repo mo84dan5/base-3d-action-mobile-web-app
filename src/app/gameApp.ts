@@ -36,6 +36,7 @@ import { GameRenderer } from '../infrastructure/three/gameRenderer';
 import { Hud } from '../ui/hud';
 import { PauseMenu } from '../ui/pauseMenu';
 import { StyleSelectModal } from '../ui/styleSelectModal';
+import { withSlot } from '../domain/equipment/equipment';
 import { ResultScreen } from '../ui/resultScreen';
 import { TitleScreen } from '../ui/titleScreen';
 
@@ -93,12 +94,18 @@ export class GameApp {
       onChange: (s) => this.applySettings(s),
       onResume: () => this.dispatch({ type: 'resumePressed' }),
       onTitle: () => this.dispatch({ type: 'titlePressed' }),
-      onOpenStyleSelect: () => this.styleSelect.show(),
+      onOpenStyleSelect: (slot) => {
+        this.styleSelect.showSlot(slot);
+        this.styleSelect.show();
+      },
     });
-    this.styleSelect = new StyleSelectModal(this.settings.attackStyle, {
-      onSelect: (id) => {
-        this.applySettings({ ...this.settings, attackStyle: id });
-        this.pause.setAttackStyle(id);
+    this.styleSelect = new StyleSelectModal(this.settings.equipment, {
+      onSelect: (slot, id) => {
+        this.applySettings({
+          ...this.settings,
+          equipment: withSlot(this.settings.equipment, slot, id),
+        });
+        this.pause.setEquipment(slot, id);
       },
       onClose: () => this.styleSelect.hide(),
     });

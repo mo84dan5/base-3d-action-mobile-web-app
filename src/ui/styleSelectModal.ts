@@ -6,6 +6,13 @@ import {
   type StyleCategory,
 } from '../domain/attackStyle/actionSpec';
 import { ATTACK_STYLES, findAttackStyle } from '../domain/attackStyle/attackStyleCatalog';
+import {
+  EQUIPMENT_SLOTS,
+  SLOT_LABELS,
+  withSlot,
+  type Equipment,
+  type EquipmentSlot,
+} from '../domain/equipment/equipment';
 import { isStyleImplemented } from '../domain/attackStyle/styleResolver';
 import { el, onPress } from './dom';
 
@@ -13,7 +20,8 @@ import { el, onPress } from './dom';
 // 選択は即時に onSelect で通知し、呼び出し側が保存・反映する。
 
 export interface StyleSelectCallbacks {
-  readonly onSelect: (id: string) => void;
+  /** 選択中のスロットに即時保存する(F12) */
+  readonly onSelect: (slot: EquipmentSlot, id: string) => void;
   readonly onClose: () => void;
 }
 
@@ -87,12 +95,17 @@ export class StyleSelectModal {
   private readonly detail: HTMLElement;
   private readonly items = new Map<string, HTMLButtonElement>();
 
+  private equipment: Equipment;
+  private slot: EquipmentSlot = 'rightArm';
+  private readonly slotTabs = new Map<EquipmentSlot, HTMLButtonElement>();
+
   constructor(
-    initialId: string,
+    initialEquipment: Equipment,
     private readonly callbacks: StyleSelectCallbacks,
   ) {
-    this.selectedId = initialId;
-    this.category = findAttackStyle(initialId)?.category ?? 'sword';
+    this.equipment = initialEquipment;
+    this.selectedId = initialEquipment[this.slot];
+    this.category = findAttackStyle(this.selectedId)?.category ?? 'sword';
     this.el = el('section', 'screen pause-screen style-screen');
     this.el.dataset.screen = 'styleSelect';
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -102,7 +115,18 @@ export class StyleSelectModal {
     close.dataset.testid = 'style-close';
     close.setAttribute('aria-label', '閉じる');
     onPress(close, () => this.callbacks.onClose());
-    head.append(el('span', '', '攻撃スタイル'), close);
+    head.append(el('span', '', '装備'), close);
+
+    // スロットタブ(頭 / 右腕 / 左腕)。S05 要素 6
+    const slotTabs = el('div', 'slot-tabs');
+    slotTabs.dataset.testid = 'slot-tabs';
+    for (const s of EQUIPMENT_SLOTS) {
+      const b = el('button', 'slot-tab', SLOT_LABELS[s]);
+      b.dataset.testid = `slot-tab-${s}`;
+      onPress(b, () => this.showSlot(s));
+      this.slotTabs.set(s, b);
+      slotTabs.append(b);
+    }
 
     const tabs = el('div', 'style-tabs');
     tabs.dataset.testid = 'style-tabs';
@@ -126,7 +150,7 @@ export class StyleSelectModal {
     done.dataset.testid = 'style-done';
     onPress(done, () => this.callbacks.onClose());
     foot.append(done);
-    dialog.append(head, tabs, body, foot);
+    dialog.append(head, slotTabs, tabs, body, foot);
     this.el.append(dialog);
     this.showCategory(this.category);
   }
@@ -154,9 +178,21 @@ export class StyleSelectModal {
   private select(id: string): void {
     if (this.selectedId !== id) {
       this.selectedId = id;
-      this.callbacks.onSelect(id);
+      this.equipment = withSlot(this.equipment, this.slot, id);
+      this.callbacks.onSelect(this.slot, id);
     }
     this.refreshSelection();
+  }
+
+  /** スロットタブを切り替え、そのスロットの現在のスタイルを選択状態にする。 */
+  showSlot(slot: EquipmentSlot): void {
+    this.slot = slot;
+    for (const [s, b] of this.slotTabs) b.classList.toggle('on', s === slot);
+    this.setSelected(this.equipment[slot]);
+  }
+
+  currentSlot(): EquipmentSlot {
+    return this.slot;
   }
 
   private refreshSelection(): void {

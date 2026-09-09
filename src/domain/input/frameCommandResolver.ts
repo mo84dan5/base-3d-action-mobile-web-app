@@ -1,7 +1,7 @@
 import { FRAME_COMMAND_PRIORITY, type InputCommand, type InputCommandType } from './inputCommand';
 
 // 同一フレームに複数の押下コマンドが成立した場合は
-// ジャンプ > ダッシュ > バースト > スキル > 通常攻撃 の順で 1 つだけ処理する(F03 同時押し)。
+// ジャンプ > ダッシュ > バースト > 頭 > 左腕 > 右腕(攻撃)の順で 1 つだけ処理する(F03 同時押し)。
 
 const EXCLUSIVE = new Set<InputCommandType>(FRAME_COMMAND_PRIORITY);
 

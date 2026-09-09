@@ -614,13 +614,13 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
     expect(await enemyHp(page, 3)).toBeLessThanOrEqual(25);
   });
 
-  test('S03 の攻撃スタイル行から S05 が開き、選択が保存されて S03 の表示名が変わる', async ({
+  test('S03 の装備: 右腕 行から S05 が右腕タブで開き、選択が保存されて S03 の表示名が変わる', async ({
     page,
   }) => {
     await startGame(page);
     await tap(page, 'pause');
-    await expect(page.getByTestId('setting-attackStyle')).toContainText('格闘');
-    await tap(page, 'setting-attackStyle');
+    await expect(page.getByTestId('setting-equipment-rightArm')).toContainText('格闘');
+    await tap(page, 'setting-equipment-rightArm');
     await expect(page.locator('[data-screen="styleSelect"]')).toBeVisible();
     await expect(page.getByTestId('style-category-sword')).toHaveClass(/on/);
     await tap(page, 'style-category-firearm');
@@ -629,19 +629,19 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
     await expect(page.getByTestId('style-detail-name')).toHaveText('ショットガン');
     await expect(page.getByTestId('style-unimplemented')).toHaveCount(0);
     const stored = await page.evaluate(() => localStorage.getItem('b3d.settings.v1'));
-    expect(stored).toContain('"attackStyle":"shotgun"');
+    expect(stored).toContain('"rightArm":"shotgun"');
     await tap(page, 'style-done');
     await expect(page.locator('[data-screen="styleSelect"]')).toBeHidden();
     await expect(page.locator('[data-screen="pause"]')).toBeVisible();
-    await expect(page.getByTestId('setting-attackStyle')).toContainText('ショットガン(銃火器)');
+    await expect(page.getByTestId('setting-equipment-rightArm')).toContainText('ショットガン(銃火器)');
     await tap(page, 'resume');
-    await expect(page.getByTestId('style-name')).toHaveText('ショットガン');
+    await expect(page.getByTestId('style-name')).toContainText('右: ショットガン');
   });
 
   test('S05 は 10 系統 × 10 スタイルを一覧に出し、未実装のスタイルは無い', async ({ page }) => {
     await startGame(page);
     await tap(page, 'pause');
-    await tap(page, 'setting-attackStyle');
+    await tap(page, 'setting-equipment-rightArm');
     const categories = [
       'sword',
       'strike',
@@ -668,7 +668,7 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
   }) => {
     test.setTimeout(120_000);
     await startWithStyle(page, 'shotgun');
-    await expect(page.getByTestId('style-name')).toHaveText('ショットガン');
+    await expect(page.getByTestId('style-name')).toContainText('右: ショットガン');
     await approach(page, 3, 5.5);
     const before = await enemyHp(page, 3);
     // 徘徊型は接近して攻撃してくるため、押下が被弾で無効になることがある。ダメージが入るまで押し直す

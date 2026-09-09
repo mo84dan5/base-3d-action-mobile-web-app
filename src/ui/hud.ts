@@ -1,5 +1,6 @@
 import type { ScreenProjector } from '../application/ports';
 import type { DamageNumberView, ViewState } from '../application/viewState';
+import { EQUIPMENT_SLOTS, SLOT_LABELS, type EquipmentSlot } from '../domain/equipment/equipment';
 import type { ButtonInputSet, ButtonKind } from '../domain/input/buttonPressTracker';
 import type { Vec2 } from '../domain/math/vec2';
 import type { Orientation } from '../domain/orientation/orientation';
@@ -58,7 +59,6 @@ export class Hud {
   private lastHp = -1;
   private lastStamina = -1;
   private lastCountdown: string | null = null;
-  private lastSkillReady = true;
   private lastPlayerDamageId = -1;
   private hpFlashUntil = 0;
   private showFps = false;
@@ -147,7 +147,8 @@ export class Hud {
     group.dataset.testid = 'action-buttons';
     group.append(
       this.button('interact', 'インタラクト', 'interact', false),
-      this.button('skill', 'スキル', 'skill', true),
+      this.button('head', '頭', 'head', true),
+      this.button('leftArm', '左腕', 'left-arm', true),
       this.button('burst', 'バースト', 'burst', true),
       this.button('jump', 'ジャンプ', 'jump', false),
       this.button('attack', '攻撃', 'attack', true),
@@ -305,7 +306,8 @@ export class Hud {
       if (b.label.textContent !== label) b.label.textContent = label;
     };
     set('attack', states.attack.enabled, states.attack.label);
-    set('skill', states.skill.enabled, states.skill.label);
+    set('leftArm', states.leftArm.enabled, states.leftArm.label);
+    set('head', states.head.enabled, states.head.label);
     set('burst', states.burst.enabled, states.burst.label);
     set('jump', states.jump.enabled, states.jump.label);
     set('sprint', states.sprint.enabled, states.sprint.label);
@@ -318,24 +320,21 @@ export class Hud {
       this.input.setEnabled('interact', states.interact.enabled);
       interact.label.textContent = view.hud.interactTargetName ?? states.interact.label;
     }
-    const skill = this.buttons.get('skill');
-    if (skill?.ring && skill.cdLabel) {
-      skill.ring.style.setProperty('--ratio', String(view.hud.skillCooldownRatio));
-      skill.cdLabel.textContent = view.hud.skillCooldownLabel;
-      const ready = view.hud.skillCooldownRatio === 0;
-      if (ready && !this.lastSkillReady) {
-        skill.el.classList.remove('ready-pop');
-        forceReflow(skill.el);
-        skill.el.classList.add('ready-pop');
-      }
-      this.lastSkillReady = ready;
-    }
-    const attackButton = this.buttons.get('attack');
-    if (attackButton?.ring) {
-      const ratio = view.hud.chargeRatio;
-      attackButton.ring.style.setProperty('--ratio', String(ratio));
-      attackButton.el.classList.toggle('charging', ratio > 0);
-      attackButton.el.classList.toggle('full', ratio >= 1);
+    // 技ボタン(F12): 略称と、実行中の技のボタンにタメのリング
+    const techniqueButtons: readonly [EquipmentSlot, ButtonKind][] = [
+      ['rightArm', 'attack'],
+      ['leftArm', 'leftArm'],
+      ['head', 'head'],
+    ];
+    for (const [slot, kind] of techniqueButtons) {
+      const b = this.buttons.get(kind);
+      if (!b?.ring || !b.cdLabel) continue;
+      const short = view.hud.techniques[slot].shortName;
+      if (b.cdLabel.textContent !== short) b.cdLabel.textContent = short;
+      const ratio = view.hud.activeTechniqueSlot === slot ? view.hud.chargeRatio : 0;
+      b.ring.style.setProperty('--ratio', String(ratio));
+      b.el.classList.toggle('charging', ratio > 0);
+      b.el.classList.toggle('full', ratio >= 1);
     }
     const burst = this.buttons.get('burst');
     if (burst?.ring) {
@@ -346,16 +345,23 @@ export class Hud {
 
   private updateStyle(view: ViewState): void {
     const style = view.hud.style;
-    const text = style.fallbackFrom ? `${style.name}(${style.fallbackFrom} は未実装)` : style.name;
+    const t = view.hud.techniques;
+    const label = (slot: EquipmentSlot) => {
+      const v = t[slot];
+      return v.fallbackFrom ? `${v.name}(未実装)` : v.name;
+    };
+    const text = `右: ${label('rightArm')} / 左: ${label('leftArm')} / 頭: ${label('head')}`;
     if (text !== this.lastStyleText) {
       this.styleName.textContent = text;
       this.lastStyleText = text;
     }
     const parts: string[] = [];
     if (style.rolledName) parts.push(`→ ${style.rolledName}`);
-    if (style.ammo) {
+    for (const slot of EQUIPMENT_SLOTS) {
+      const ammo = t[slot].ammo;
+      if (!ammo) continue;
       parts.push(
-        style.ammo.reloading ? 'リロード中' : `残弾 ${style.ammo.remaining}/${style.ammo.capacity}`,
+        `${SLOT_LABELS[slot]} ${ammo.reloading ? 'リロード中' : `残弾 ${ammo.remaining}/${ammo.capacity}`}`,
       );
     }
     if (style.hitCount !== null) parts.push(`HIT ${style.hitCount}`);

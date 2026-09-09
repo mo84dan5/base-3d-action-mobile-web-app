@@ -1,3 +1,4 @@
+import type { EquipmentSlot } from '../domain/equipment/equipment';
 import type { ButtonStates } from '../domain/action/actionGate';
 import type { GameResult, Stats } from '../domain/combat/result';
 import type { DeathProgress, EnemyKind } from '../domain/enemy/enemyState';
@@ -31,9 +32,13 @@ export interface PlayerView {
   readonly defeatProgress: number;
   /** タメ率 0〜1(Charge 中のみ。それ以外は 0) */
   readonly chargeRatio: number;
-  /** 現在の攻撃スタイル(F11) */
+  /** 実行中の技のスタイル(F11)。技の実行中でなければ右腕のスタイル */
   readonly styleId: string;
   readonly styleCategory: StyleCategory;
+  /** 装備(F12): スロットごとのスタイルと系統(パーツの付属物の表示用) */
+  readonly equipment: Readonly<
+    Record<EquipmentSlot, { readonly styleId: string; readonly category: StyleCategory }>
+  >;
   /** ガード中(受けの窓の中) */
   readonly guarding: boolean;
   /** タメ中のカメラ距離(スナイパー)。null は既定 */
@@ -68,6 +73,21 @@ export interface SummonView {
   readonly position: Vec3;
   readonly phase: SummonPhase;
   readonly styleId: string;
+}
+
+/** 技ボタンに出すスロットごとの情報(S02 要素 6 / 7 / 19) */
+export interface TechniqueHudView {
+  readonly id: string;
+  readonly name: string;
+  /** 先頭 3 文字の略称 */
+  readonly shortName: string;
+  readonly category: StyleCategory;
+  readonly fallbackFrom: string | null;
+  readonly ammo: {
+    readonly remaining: number;
+    readonly capacity: number;
+    readonly reloading: boolean;
+  } | null;
 }
 
 export interface StyleHudView {
@@ -123,8 +143,6 @@ export interface HudView {
   readonly phase: SessionPhase;
   readonly countdownLabel: string | null;
   readonly buttons: ButtonStates;
-  readonly skillCooldownRatio: number;
-  readonly skillCooldownLabel: string;
   readonly energyRatio: number;
   readonly energyFull: boolean;
   /** エネルギーの現在値 / 最大値(S02 要素 18 の数値表示) */
@@ -132,8 +150,10 @@ export interface HudView {
   readonly energyMax: number;
   /** エネルギー不足で行動が拒否された直後 0.4 秒間 true(EN バーの点滅) */
   readonly energyShort: boolean;
-  /** 銃撃のタメ率(攻撃ボタンのリング表示用) */
+  /** タメ率(実行中の技のボタンのリング表示用) */
   readonly chargeRatio: number;
+  /** 実行中の技のスロット。null は技の実行中でない */
+  readonly activeTechniqueSlot: EquipmentSlot | null;
   readonly indicator: 'climb' | 'glide' | null;
   readonly interactTargetName: string | null;
   readonly interactTargetPosition: Vec3 | null;
@@ -142,6 +162,8 @@ export interface HudView {
   readonly stats: Stats;
   /** 直近の被ダメージ(HP バー横の数値表示用)。null は表示なし */
   readonly recentPlayerDamage: DamageNumberView | null;
+  /** スロットごとの技の表示(F12)。`style` は互換のため右腕(または実行中の技)を指す */
+  readonly techniques: Readonly<Record<EquipmentSlot, TechniqueHudView>>;
   readonly style: StyleHudView;
 }
 

@@ -263,12 +263,12 @@ describe('スタイル固有の挙動(F11)', () => {
       s.run(0.35, withStyle(style('revolver')));
     }
     expect(s.count('shotFired')).toBe(6);
-    expect(s.player.ammo?.remaining).toBe(0);
-    expect(s.player.ammo?.reloadRemaining).toBeGreaterThan(0);
+    expect(s.player.ammo.rightArm?.remaining).toBe(0);
+    expect(s.player.ammo.rightArm?.reloadRemaining).toBeGreaterThan(0);
     s.step(input);
     expect(s.count('shotFired')).toBe(6);
     s.run(1.3, withStyle(style('revolver')));
-    expect(s.player.ammo?.remaining).toBe(6);
+    expect(s.player.ammo.rightArm?.remaining).toBe(6);
     s.step(input);
     s.run(0.1, withStyle(style('revolver')));
     expect(s.count('shotFired')).toBe(7);

@@ -1,3 +1,4 @@
+import { DEFAULT_EQUIPMENT } from '../domain/equipment/equipment';
 import { describe, expect, it } from 'vitest';
 import { defaultConfig } from '../domain/config/gameConfig';
 import type { InputCommand } from '../domain/input/inputCommand';
@@ -10,7 +11,7 @@ import { GameSession } from './gameSession';
 
 const config = defaultConfig;
 const COUNTDOWN = config.combat.countdownSeconds + config.combat.countdownStartLabelSeconds;
-const GUN: Settings = { ...defaultSettings, attackStyle: 'gun' };
+const GUN: Settings = { ...defaultSettings, equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'gun' } };
 
 function layout(enemies: StageLayout['enemies']): StageLayout {
   return {
@@ -54,7 +55,7 @@ class Harness {
 describe('射撃(銃撃スタイル。F04 / F10)', () => {
   it('正面 6 m の敵に 8 ダメージが入り、エネルギー +3、弾道線とマズルフラッシュが出て、シェイクは起きない', () => {
     const h = new Harness(layout([{ kind: 'patrol', position: vec3(0, 0, 6) }]), GUN);
-    h.step([{ type: 'AttackPressed' }]);
+    h.step([{ type: 'RightArmPressed' }]);
     h.run(0.3);
     expect(h.hp(1)).toBe(52);
     expect(h.session.energy.value).toBe(3);
@@ -64,11 +65,11 @@ describe('射撃(銃撃スタイル。F04 / F10)', () => {
   });
   it('±15 度の外の敵には向きを合わせず当たらない。射程 12 m の外も当たらない', () => {
     const side = new Harness(layout([{ kind: 'patrol', position: vec3(3, 0, 5) }]), GUN);
-    side.step([{ type: 'AttackPressed' }]);
+    side.step([{ type: 'RightArmPressed' }]);
     side.run(0.3);
     expect(side.hp(1)).toBe(60);
     const far = new Harness(layout([{ kind: 'patrol', position: vec3(0, 0, 13) }]), GUN);
-    far.step([{ type: 'AttackPressed' }]);
+    far.step([{ type: 'RightArmPressed' }]);
     far.run(0.3);
     expect(far.hp(1)).toBe(60);
   });
@@ -76,14 +77,14 @@ describe('射撃(銃撃スタイル。F04 / F10)', () => {
     const h = new Harness(layout([{ kind: 'patrol', position: vec3(0, 0, 8) }]), GUN, [
       { kind: 'box', min: vec3(-3, 0, 3), max: vec3(3, 3, 4) },
     ]);
-    h.step([{ type: 'AttackPressed' }]);
+    h.step([{ type: 'RightArmPressed' }]);
     h.run(0.3);
     expect(h.hp(1)).toBe(60);
     expect(h.effects.some((e) => e.kind === 'tracer' && e.to.z < 3.5)).toBe(true);
   });
   it('連射: 1 秒間押し続けると 4 発当たる(0.25 秒間隔)', () => {
     const h = new Harness(layout([{ kind: 'dummy', position: vec3(0, 0, 5) }]), GUN);
-    for (let i = 0; i < 60; i++) h.step(i % 5 === 0 ? [{ type: 'AttackPressed' }] : []);
+    for (let i = 0; i < 60; i++) h.step(i % 5 === 0 ? [{ type: 'RightArmPressed' }] : []);
     h.run(0.3);
     // 0 / 0.25 / 0.5 / 0.75 / 1.0 秒の 5 発(押下は 1 回だけ保持される)
     expect(h.hp(1)).toBe(200 - 8 * 5);
@@ -99,10 +100,10 @@ describe('タメ打ち(銃撃スタイル。F04 / F10)', () => {
       ]),
       GUN,
     );
-    h.step([{ type: 'AttackHoldStart' }]);
+    h.step([{ type: 'RightArmHoldStart' }]);
     h.run(1.0);
     expect(h.session.view().hud.chargeRatio).toBeCloseTo(1, 1);
-    h.step([{ type: 'AttackHoldEnd' }]);
+    h.step([{ type: 'RightArmHoldEnd' }]);
     let maxHitstop = 0;
     let maxShake = 0;
     for (let i = 0; i < 40; i++) {
@@ -121,21 +122,21 @@ describe('タメ打ち(銃撃スタイル。F04 / F10)', () => {
     const h = new Harness(layout([{ kind: 'patrol', position: vec3(0, 0, 1.3) }]), GUN);
     const slot = h.session.enemies[0];
     if (slot) slot.state = { ...slot.state, ai: 'chase' };
-    h.step([{ type: 'AttackHoldStart' }]);
+    h.step([{ type: 'RightArmHoldStart' }]);
     h.run(1.5);
     expect(h.session.player.hp).toBeLessThan(100);
     expect(h.session.player.name).not.toBe('charge');
-    h.step([{ type: 'AttackHoldEnd' }]);
+    h.step([{ type: 'RightArmHoldEnd' }]);
     h.run(0.5);
     expect(h.effects.some((e) => e.kind === 'tracer')).toBe(false);
   });
   it('向き切替の強制解放(cancelInputs)でタメが破棄される', () => {
     const h = new Harness(layout([{ kind: 'patrol', position: vec3(0, 0, 5) }]), GUN);
-    h.step([{ type: 'AttackHoldStart' }]);
+    h.step([{ type: 'RightArmHoldStart' }]);
     h.run(0.5);
     h.session.cancelInputs();
     expect(h.session.player.name).toBe('idle');
-    h.step([{ type: 'AttackHoldEnd' }]);
+    h.step([{ type: 'RightArmHoldEnd' }]);
     h.run(0.5);
     expect(h.hp(1)).toBe(60);
   });
@@ -144,9 +145,9 @@ describe('タメ打ち(銃撃スタイル。F04 / F10)', () => {
 describe('接近強攻撃(格闘スタイル。F04)', () => {
   it('4 m 先の敵へ踏み込み 35 ダメージ、スタミナ −25、エネルギー +10、シェイク 0.08', () => {
     const h = new Harness(layout([{ kind: 'patrol', position: vec3(0, 0, 4) }]), defaultSettings);
-    h.step([{ type: 'AttackPressed' }]);
+    h.step([{ type: 'RightArmPressed' }]);
     h.run(0.2);
-    h.step([{ type: 'AttackHoldStart' }]);
+    h.step([{ type: 'RightArmHoldStart' }]);
     expect(h.session.player.name).toBe('strongAttack');
     expect(h.session.player.stamina.value).toBe(75);
     let maxShake = 0;
@@ -164,7 +165,7 @@ describe('接近強攻撃(格闘スタイル。F04)', () => {
   });
   it('格闘スタイルでは AttackHoldEnd は何もしない', () => {
     const h = new Harness(layout([{ kind: 'patrol', position: vec3(0, 0, 5) }]), defaultSettings);
-    h.step([{ type: 'AttackHoldEnd' }]);
+    h.step([{ type: 'RightArmHoldEnd' }]);
     expect(h.session.player.name).toBe('idle');
   });
 });

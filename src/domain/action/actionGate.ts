@@ -1,13 +1,15 @@
+import type { EquipmentSlot } from '../equipment/equipment';
 import type { ClimbPhase, PlayerStateName } from '../player/playerState';
 import { isGroundLocomotion } from '../player/playerState';
 
-// ボタンの有効条件とラベル(F03 ボタン一覧)。
+// ボタンの有効条件とラベル(F03 ボタン一覧)。技ボタンは 攻撃 = 右腕 / 左腕 / 頭 の 3 つ(F12)。
 
 export interface ActionGateContext {
   readonly playerState: PlayerStateName;
   readonly climbPhase: ClimbPhase | null;
   readonly countdownActive: boolean;
-  readonly skillCooldownReady: boolean;
+  /** 実行中の技のスロット。別スロットの技ボタンは無効(F12) */
+  readonly activeTechniqueSlot: EquipmentSlot | null;
   readonly burstCooldownReady: boolean;
   readonly energyFull: boolean;
   readonly hasInteractTarget: boolean;
@@ -20,7 +22,8 @@ export interface ButtonState {
 
 export interface ButtonStates {
   readonly attack: ButtonState;
-  readonly skill: ButtonState;
+  readonly leftArm: ButtonState;
+  readonly head: ButtonState;
   readonly burst: ButtonState;
   readonly jump: ButtonState;
   readonly sprint: ButtonState;
@@ -41,10 +44,10 @@ export function attackEnabled(ctx: ActionGateContext): boolean {
   );
 }
 
-/** スキル: クールダウン中でなく接地移動中。 */
-export function skillEnabled(ctx: ActionGateContext): boolean {
-  if (ctx.countdownActive) return false;
-  return ctx.skillCooldownReady && isGroundLocomotion(ctx.playerState);
+/** 技ボタン(F12): 攻撃ボタンと同じ条件。別スロットの技の実行中は無効。 */
+export function techniqueEnabled(ctx: ActionGateContext, slot: EquipmentSlot): boolean {
+  if (!attackEnabled(ctx)) return false;
+  return ctx.activeTechniqueSlot === null || ctx.activeTechniqueSlot === slot;
 }
 
 /** バースト: エネルギー 100%、接地移動中、クールダウン中でない。 */
@@ -88,8 +91,9 @@ export function jumpButtonLabel(state: PlayerStateName): string {
 
 export function computeButtonStates(ctx: ActionGateContext): ButtonStates {
   return {
-    attack: { enabled: attackEnabled(ctx), label: '攻撃' },
-    skill: { enabled: skillEnabled(ctx), label: 'スキル' },
+    attack: { enabled: techniqueEnabled(ctx, 'rightArm'), label: '攻撃' },
+    leftArm: { enabled: techniqueEnabled(ctx, 'leftArm'), label: '左腕' },
+    head: { enabled: techniqueEnabled(ctx, 'head'), label: '頭' },
     burst: { enabled: burstEnabled(ctx), label: 'バースト' },
     jump: { enabled: jumpEnabled(), label: jumpButtonLabel(ctx.playerState) },
     sprint: { enabled: sprintEnabled(), label: sprintButtonLabel(ctx.playerState) },

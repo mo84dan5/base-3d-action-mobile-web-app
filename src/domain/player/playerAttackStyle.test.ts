@@ -159,13 +159,13 @@ describe('タメ打ち(銃撃・長押し。F04)', () => {
     s2.step(gun({ attackHoldEnd: true }));
     expect(s2.player.chargeRatio).toBe(1);
   });
-  it('タメ中は歩き速度(1.8 m/s)までしか動けず、ジャンプ・ダッシュ・スキルは無効', () => {
+  it('タメ中は歩き速度(1.8 m/s)までしか動けず、ジャンプ・ダッシュは無効', () => {
     const s = new Sim();
     s.step(gun({ attackHoldStart: true }));
     s.run(0.5, gun({ stick: { x: 0, y: 1, magnitude: 1 } }));
     expect(s.player.name).toBe('charge');
     expect(Math.hypot(s.player.velocity.x, s.player.velocity.z)).toBeCloseTo(1.8, 1);
-    s.step(gun({ jump: true, dash: true, skill: true }));
+    s.step(gun({ jump: true, dash: true }));
     expect(s.player.name).toBe('charge');
   });
   it('強制解放(cancelCharge)でタメを破棄し、発射しない', () => {

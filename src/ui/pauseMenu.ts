@@ -1,4 +1,10 @@
 import { CATEGORY_LABELS } from '../domain/attackStyle/actionSpec';
+import {
+  EQUIPMENT_SLOTS,
+  SLOT_LABELS,
+  withSlot,
+  type EquipmentSlot,
+} from '../domain/equipment/equipment';
 import { findAttackStyle } from '../domain/attackStyle/attackStyleCatalog';
 import { isStyleImplemented } from '../domain/attackStyle/styleResolver';
 import {
@@ -17,7 +23,8 @@ export interface PauseMenuCallbacks {
   readonly onChange: (settings: Settings) => void;
   readonly onResume: () => void;
   readonly onTitle: () => void;
-  readonly onOpenStyleSelect: () => void;
+  /** 装備行の「変更」。S05 をそのスロットで開く(F12) */
+  readonly onOpenStyleSelect: (slot: EquipmentSlot) => void;
 }
 
 /** S03 の攻撃スタイル行に出す表示名: 「格闘(剣術)」。未実装なら「未実装」を添える */
@@ -33,7 +40,7 @@ export class PauseMenu {
   private settings: Settings;
   private readonly sensitivity: HTMLInputElement;
   private readonly sensitivityValue: HTMLElement;
-  private styleLabel!: HTMLElement;
+  private readonly styleLabels = new Map<EquipmentSlot, HTMLElement>();
   private readonly segments = new Map<string, HTMLButtonElement[]>();
 
   constructor(
@@ -85,7 +92,7 @@ export class PauseMenu {
         ],
         initial.stickMode,
       ),
-      this.styleRow(initial.attackStyle),
+      ...EQUIPMENT_SLOTS.map((slot) => this.styleRow(slot, initial.equipment[slot])),
       this.segmentRow<Quality>(
         '表示品質',
         'quality',
@@ -115,21 +122,23 @@ export class PauseMenu {
     this.callbacks.onChange(next);
   }
 
-  private styleRow(id: string): HTMLElement {
+  private styleRow(slot: EquipmentSlot, id: string): HTMLElement {
     const row = el('div', 'setting-row');
     const button = el('button', 'style-open-btn');
-    button.dataset.testid = 'setting-attackStyle';
-    this.styleLabel = el('span', 'style-open-label', styleRowLabel(id));
-    button.append(this.styleLabel, el('span', 'style-open-arrow', '変更 ›'));
-    onPress(button, () => this.callbacks.onOpenStyleSelect());
-    row.append(el('span', '', '攻撃スタイル'), button);
+    button.dataset.testid = `setting-equipment-${slot}`;
+    const label = el('span', 'style-open-label', styleRowLabel(id));
+    this.styleLabels.set(slot, label);
+    button.append(label, el('span', 'style-open-arrow', '変更 ›'));
+    onPress(button, () => this.callbacks.onOpenStyleSelect(slot));
+    row.append(el('span', '', `装備: ${SLOT_LABELS[slot]}`), button);
     return row;
   }
 
-  /** S05 で選んだスタイルを行に反映する(保存は呼び出し側が applySettings で行う)。 */
-  setAttackStyle(id: string): void {
-    this.settings = { ...this.settings, attackStyle: id };
-    this.styleLabel.textContent = styleRowLabel(id);
+  /** S05 で選んだスタイルを装備行に反映する(保存は呼び出し側が applySettings で行う)。 */
+  setEquipment(slot: EquipmentSlot, id: string): void {
+    this.settings = { ...this.settings, equipment: withSlot(this.settings.equipment, slot, id) };
+    const label = this.styleLabels.get(slot);
+    if (label) label.textContent = styleRowLabel(id);
   }
 
   private toggleRow(

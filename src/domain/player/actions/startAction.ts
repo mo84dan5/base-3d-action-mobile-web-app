@@ -200,7 +200,8 @@ export function startAction(
     }
     return null;
   }
-  return pay(started, ctx, opts.cost, payment);
+  // 技を始めたスロットを覚える(別スロットの入力は捨てる。F12)
+  return { ...pay(started, ctx, opts.cost, payment), techniqueSlot: ctx.input.slot };
 }
 
 export function startPress(p: PlayerState, ctx: Ctx): PlayerState | null {

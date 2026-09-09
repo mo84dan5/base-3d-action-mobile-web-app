@@ -7,15 +7,15 @@ import {
   computeButtonStates,
   interactEnabled,
   jumpButtonLabel,
-  skillEnabled,
   sprintButtonLabel,
+  techniqueEnabled,
 } from './actionGate';
 
 const base: ActionGateContext = {
   playerState: 'idle',
   climbPhase: null,
   countdownActive: false,
-  skillCooldownReady: true,
+  activeTechniqueSlot: null,
   burstCooldownReady: true,
   energyFull: true,
   hasInteractTarget: true,
@@ -42,15 +42,22 @@ describe('通常攻撃ボタン(F03)', () => {
   });
 });
 
-describe('スキルボタン(F03)', () => {
-  it('クールダウン中でなく接地中なら有効', () => {
-    expect(skillEnabled(inState('run'))).toBe(true);
+describe('技ボタン(F03 / F12)', () => {
+  it('攻撃ボタンと同じ条件で有効(接地移動中・空中)', () => {
+    expect(techniqueEnabled(inState('run'), 'leftArm')).toBe(true);
+    expect(techniqueEnabled(inState('jump'), 'head')).toBe(true);
   });
-  it('クールダウン中・空中・Dash 中・カウントダウン中は無効', () => {
-    expect(skillEnabled(inState('run', { skillCooldownReady: false }))).toBe(false);
-    expect(skillEnabled(inState('jump'))).toBe(false);
-    expect(skillEnabled(inState('dash'))).toBe(false);
-    expect(skillEnabled(inState('idle', { countdownActive: true }))).toBe(false);
+  it('別スロットの技の実行中は無効、同じスロットなら有効(連射・コンボの続き)', () => {
+    expect(techniqueEnabled(inState('shoot', { activeTechniqueSlot: 'rightArm' }), 'head')).toBe(
+      false,
+    );
+    expect(
+      techniqueEnabled(inState('shoot', { activeTechniqueSlot: 'rightArm' }), 'rightArm'),
+    ).toBe(true);
+  });
+  it('Dash 中・カウントダウン中は無効', () => {
+    expect(techniqueEnabled(inState('dash'), 'leftArm')).toBe(false);
+    expect(techniqueEnabled(inState('idle', { countdownActive: true }), 'head')).toBe(false);
   });
 });
 
@@ -94,7 +101,8 @@ describe('computeButtonStates', () => {
   it('崖登り中はジャンプ・スプリントのみ有効でラベルが切り替わる', () => {
     const states = computeButtonStates(inState('climb', { climbPhase: 'climbing' }));
     expect(states.attack.enabled).toBe(false);
-    expect(states.skill.enabled).toBe(false);
+    expect(states.leftArm.enabled).toBe(false);
+    expect(states.head.enabled).toBe(false);
     expect(states.burst.enabled).toBe(false);
     expect(states.jump).toEqual({ enabled: true, label: '崖ジャンプ' });
     expect(states.sprint).toEqual({ enabled: true, label: '離す' });

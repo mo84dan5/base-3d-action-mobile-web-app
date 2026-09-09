@@ -23,9 +23,9 @@ describe('1 ステップの入力集約', () => {
     expect(f.stick.magnitude).toBe(0.5);
   });
   it('同一フレームのジャンプと攻撃はジャンプだけが残る(F03 同時押し)', () => {
-    const f = accumulateFrameInput([{ type: 'AttackPressed' }, { type: 'JumpPressed' }], noStick);
+    const f = accumulateFrameInput([{ type: 'RightArmPressed' }, { type: 'JumpPressed' }], noStick);
     expect(f.jump).toBe(true);
-    expect(f.attack).toBe(false);
+    expect(f.techniques.rightArm.press).toBe(false);
   });
   it('長押し開始 / 終了とポーズはそのまま通る', () => {
     const f = accumulateFrameInput(

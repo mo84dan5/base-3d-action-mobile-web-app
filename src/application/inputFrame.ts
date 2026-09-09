@@ -1,20 +1,27 @@
+import type { EquipmentSlot } from '../domain/equipment/equipment';
 import type { InputCommand } from '../domain/input/inputCommand';
 import { resolveFrameCommands } from '../domain/input/frameCommandResolver';
 import type { StickInput } from '../domain/stick/virtualStick';
 
 // 1 物理ステップぶんの入力。InputCommand の列を集約する(Move は最新値、Look/Zoom は合計、押下は真偽)。
+
+/** 1 スロットの技の入力(F12) */
+export interface TechniqueFrame {
+  readonly press: boolean;
+  readonly holdStart: boolean;
+  readonly holdEnd: boolean;
+}
+
+export const EMPTY_TECHNIQUE: TechniqueFrame = { press: false, holdStart: false, holdEnd: false };
+
 export interface FrameInput {
   readonly stick: StickInput;
   readonly lookDx: number;
   readonly lookDy: number;
   readonly lookEnded: boolean;
   readonly zoom: number;
-  readonly attack: boolean;
-  readonly attackHoldStart: boolean;
-  readonly attackHoldEnd: boolean;
-  readonly skill: boolean;
-  readonly skillHoldStart: boolean;
-  readonly skillHoldEnd: boolean;
+  /** スロットごとの技の入力(頭 / 右腕 / 左腕) */
+  readonly techniques: Readonly<Record<EquipmentSlot, TechniqueFrame>>;
   readonly burst: boolean;
   readonly jump: boolean;
   readonly dash: boolean;
@@ -30,12 +37,7 @@ export const EMPTY_FRAME_INPUT: FrameInput = {
   lookDy: 0,
   lookEnded: false,
   zoom: 0,
-  attack: false,
-  attackHoldStart: false,
-  attackHoldEnd: false,
-  skill: false,
-  skillHoldStart: false,
-  skillHoldEnd: false,
+  techniques: { head: EMPTY_TECHNIQUE, rightArm: EMPTY_TECHNIQUE, leftArm: EMPTY_TECHNIQUE },
   burst: false,
   jump: false,
   dash: false,
@@ -44,6 +46,13 @@ export const EMPTY_FRAME_INPUT: FrameInput = {
   interact: false,
   pause: false,
 };
+
+function technique(f: FrameInput, slot: EquipmentSlot, patch: Partial<TechniqueFrame>): FrameInput {
+  return {
+    ...f,
+    techniques: { ...f.techniques, [slot]: { ...f.techniques[slot], ...patch } },
+  };
+}
 
 /** コマンド列を 1 ステップの入力へ集約する。押下系は同一フレーム優先(F03)を適用済みで返す。 */
 export function accumulateFrameInput(
@@ -71,23 +80,32 @@ export function accumulateFrameInput(
       case 'Zoom':
         f = { ...f, zoom: f.zoom + c.delta };
         break;
-      case 'AttackPressed':
-        f = { ...f, attack: true };
+      case 'RightArmPressed':
+        f = technique(f, 'rightArm', { press: true });
         break;
-      case 'AttackHoldStart':
-        f = { ...f, attackHoldStart: true };
+      case 'RightArmHoldStart':
+        f = technique(f, 'rightArm', { holdStart: true });
         break;
-      case 'AttackHoldEnd':
-        f = { ...f, attackHoldEnd: true };
+      case 'RightArmHoldEnd':
+        f = technique(f, 'rightArm', { holdEnd: true });
         break;
-      case 'SkillPressed':
-        f = { ...f, skill: true };
+      case 'LeftArmPressed':
+        f = technique(f, 'leftArm', { press: true });
         break;
-      case 'SkillHoldStart':
-        f = { ...f, skillHoldStart: true };
+      case 'LeftArmHoldStart':
+        f = technique(f, 'leftArm', { holdStart: true });
         break;
-      case 'SkillHoldEnd':
-        f = { ...f, skillHoldEnd: true };
+      case 'LeftArmHoldEnd':
+        f = technique(f, 'leftArm', { holdEnd: true });
+        break;
+      case 'HeadPressed':
+        f = technique(f, 'head', { press: true });
+        break;
+      case 'HeadHoldStart':
+        f = technique(f, 'head', { holdStart: true });
+        break;
+      case 'HeadHoldEnd':
+        f = technique(f, 'head', { holdEnd: true });
         break;
       case 'BurstPressed':
         f = { ...f, burst: true };

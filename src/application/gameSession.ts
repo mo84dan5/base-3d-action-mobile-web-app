@@ -1,9 +1,7 @@
 import { computeButtonStates, type ButtonStates } from '../domain/action/actionGate';
 import {
-  cooldownRatio,
   isReady,
   READY_COOLDOWN,
-  remainingSecondsLabel,
   startCooldown,
   tickCooldown,
   type Cooldown,
@@ -26,6 +24,13 @@ import {
 import type { AttackStyleDefinition, TargetCone } from '../domain/attackStyle/actionSpec';
 import { findAttackStyle } from '../domain/attackStyle/attackStyleCatalog';
 import { resolveAttackStyleDetailed } from '../domain/attackStyle/styleResolver';
+import {
+  DEFAULT_EQUIPMENT,
+  EQUIPMENT_SLOTS,
+  SLOT_PRIORITY,
+  shortStyleName,
+  type EquipmentSlot,
+} from '../domain/equipment/equipment';
 import {
   createStats,
   evaluateResult,
@@ -133,7 +138,13 @@ import { PlacedSystem } from './placedSystem';
 import { applyRayHit, applyVolumeHit, HitBatch } from './playerHits';
 import { ProjectileSystem } from './projectileSystem';
 import { SummonSystem } from './summonSystem';
-import { accumulateFrameInput, EMPTY_FRAME_INPUT, type FrameInput } from './inputFrame';
+import {
+  accumulateFrameInput,
+  EMPTY_FRAME_INPUT,
+  EMPTY_TECHNIQUE,
+  type FrameInput,
+  type TechniqueFrame,
+} from './inputFrame';
 import type { EffectPort, RandomSource } from './ports';
 import { separatePair } from './separation';
 import type {
@@ -144,6 +155,7 @@ import type {
   SessionPhase,
   StyleHudView,
   ViewState,
+  TechniqueHudView,
 } from './viewState';
 import type { InputCommand } from '../domain/input/inputCommand';
 
@@ -174,7 +186,6 @@ export class GameSession implements CombatHost {
   result: GameResult | null = null;
   countdownRemaining: number;
   endingRemaining = 0;
-  skillCooldown: Cooldown = READY_COOLDOWN;
   burstCooldown: Cooldown = READY_COOLDOWN;
   energy: Energy;
   damageNumbers: readonly DamageNumber[] = [];
@@ -193,9 +204,20 @@ export class GameSession implements CombatHost {
   readonly summons = new SummonSystem();
   private readonly interactables: readonly Interactable[];
   private lastPlayerDamage: DamageNumber | null = null;
-  private currentStyle: AttackStyleDefinition;
-  private styleFallbackFrom: string | null = null;
-  private rolledStyleId: string | null = null;
+  /** スロットごとの装備スタイル(F12)。settings から毎ステップ解決する */
+  private styles: Record<EquipmentSlot, AttackStyleDefinition>;
+  private styleFallbackFrom: Record<EquipmentSlot, string | null> = {
+    head: null,
+    rightArm: null,
+    leftArm: null,
+  };
+  private rolledStyleId: Record<EquipmentSlot, string | null> = {
+    head: null,
+    rightArm: null,
+    leftArm: null,
+  };
+  /** 今ステップに技の入力を渡したスロット(イベントの styleId 解決・HUD のリング表示に使う) */
+  private inputSlot: EquipmentSlot = 'rightArm';
   private dotTimer = 0;
 
   constructor(private readonly deps: GameSessionDeps) {
@@ -213,7 +235,11 @@ export class GameSession implements CombatHost {
       config.combat.countdownSeconds + config.combat.countdownStartLabelSeconds;
     this.energy = createEnergy(config.action);
     this.interactables = [createSignboard(stage.signboard.position, config.action)];
-    this.currentStyle = resolveAttackStyleDetailed('melee').style;
+    this.styles = {
+      head: resolveAttackStyleDetailed(DEFAULT_EQUIPMENT.head).style,
+      rightArm: resolveAttackStyleDetailed(DEFAULT_EQUIPMENT.rightArm).style,
+      leftArm: resolveAttackStyleDetailed(DEFAULT_EQUIPMENT.leftArm).style,
+    };
   }
 
   get config(): GameConfig {
@@ -251,7 +277,7 @@ export class GameSession implements CombatHost {
       playerState: this.player.name,
       climbPhase: this.player.climb?.phase ?? null,
       countdownActive: this.countdownActive,
-      skillCooldownReady: isReady(this.skillCooldown),
+      activeTechniqueSlot: this.player.techniqueSlot,
       burstCooldownReady: isReady(this.burstCooldown),
       energyFull: isEnergyFull(this.energy),
       hasInteractTarget: this.interactTarget() !== null,
@@ -293,10 +319,27 @@ export class GameSession implements CombatHost {
 
   private gateActions(input: FrameInput): FrameInput {
     const buttons = this.buttonStates();
+    const active = this.player.techniqueSlot;
+    const gate = (slot: EquipmentSlot, enabled: boolean): TechniqueFrame => {
+      const t = input.techniques[slot];
+      // 押下はボタンの有効状態で止める。長押し開始は実行中の技(コンボ中の強攻撃など)へ
+      // 繋ぐため状態では止めず、別スロットの技の実行中だけ落とす(F12)。
+      // 長押しの終了は開始済みの技を締めるため常に通す。
+      const sameSlot = active === null || active === slot;
+      return {
+        ...EMPTY_TECHNIQUE,
+        press: t.press && enabled,
+        holdStart: t.holdStart && sameSlot,
+        holdEnd: t.holdEnd,
+      };
+    };
     return {
       ...input,
-      attack: input.attack && buttons.attack.enabled,
-      skill: input.skill && buttons.skill.enabled,
+      techniques: {
+        head: gate('head', buttons.head.enabled),
+        rightArm: gate('rightArm', buttons.attack.enabled),
+        leftArm: gate('leftArm', buttons.leftArm.enabled),
+      },
       burst: input.burst && buttons.burst.enabled,
       interact: input.interact && buttons.interact.enabled,
     };
@@ -309,7 +352,6 @@ export class GameSession implements CombatHost {
       if (this.countdownRemaining <= 0) this.phase = 'playing';
     }
     if (this.phase === 'playing') this.stats = tickClearTime(this.stats, dt);
-    this.skillCooldown = tickCooldown(this.skillCooldown, dt);
     this.burstCooldown = tickCooldown(this.burstCooldown, dt);
     this.damageNumbers = tickDamageNumbers(this.damageNumbers, dt, config.hitReaction);
     if (this.lastPlayerDamage && !this.damageNumbers.includes(this.lastPlayerDamage)) {
@@ -333,10 +375,22 @@ export class GameSession implements CombatHost {
     const { config } = this;
     const entityDt = this.player.hitstopSteps > 0 ? 0 : dt;
     const candidates = this.targetCandidates();
-    const resolved = resolveAttackStyleDetailed(settings.attackStyle);
-    const style = resolved.style;
-    this.currentStyle = style;
-    this.styleFallbackFrom = resolved.exact ? null : settings.attackStyle;
+    for (const slot of EQUIPMENT_SLOTS) {
+      const id = settings.equipment[slot];
+      const resolved = resolveAttackStyleDetailed(id);
+      if (this.styles[slot].id !== resolved.style.id) {
+        // 装備を変えたスロットの状態(残弾・ランダムの選択)は初期化する(F12)
+        this.player = { ...this.player, ammo: { ...this.player.ammo, [slot]: null } };
+        this.rolledStyleId[slot] = null;
+      }
+      this.styles[slot] = resolved.style;
+      this.styleFallbackFrom[slot] = resolved.exact ? null : id;
+    }
+    // 技の入力は 1 ステップに 1 スロットぶん渡す(F03 の優先順: 頭 > 左腕 > 右腕)。実行中の技があればそのスロットを優先する
+    const slot = this.pickInputSlot(input);
+    const technique = input.techniques[slot];
+    const style = this.styles[slot];
+    this.inputSlot = slot;
     const findTargets = (cone: TargetCone, max: number) =>
       nearestTargetsInCone(
         this.player.position,
@@ -351,14 +405,14 @@ export class GameSession implements CombatHost {
       cameraYaw: this.camera.orbit.yaw,
       jump: input.jump,
       dash: input.dash,
-      attack: input.attack,
-      skill: input.skill,
+      attack: technique.press,
       burst: input.burst,
       sprintHoldStart: input.sprintHoldStart,
       sprintHoldEnd: input.sprintHoldEnd,
-      attackHoldStart: input.attackHoldStart,
-      attackHoldEnd: input.attackHoldEnd,
+      attackHoldStart: technique.holdStart,
+      attackHoldEnd: technique.holdEnd,
       actionsAllowed: this.phase === 'playing',
+      slot,
       style,
       energy: this.energy.value,
       random: this.deps.rng(),
@@ -481,7 +535,7 @@ export class GameSession implements CombatHost {
         this.effect({ kind: 'blink', from: event.from, to: event.to });
         break;
       case 'styleRolled':
-        this.rolledStyleId = event.styleId;
+        this.rolledStyleId[this.inputSlot] = event.styleId;
         break;
       case 'actionRejected':
         if (event.reason === 'energy')
@@ -513,11 +567,6 @@ export class GameSession implements CombatHost {
     const p = this.player;
     const { config } = this;
     const kind = event.kind;
-    if (kind === 'skill') {
-      this.skillCooldown = startCooldown(config.action.skillCooldown);
-      this.effect({ kind: 'skillTelegraph', position: p.position });
-      return;
-    }
     if (kind === 'burst') {
       this.burstCooldown = startCooldown(config.action.burstCooldown);
       this.energy = spendAllEnergy(this.energy);
@@ -567,7 +616,7 @@ export class GameSession implements CombatHost {
         chargeRatio: shot.chargeRatio,
       },
     );
-    const styleId = this.currentStyle.id;
+    const styleId = this.activeStyle().id;
     this.effect({ kind: 'muzzleFlash', position: shot.origin, yaw: this.player.yaw, styleId });
     for (const r of results) {
       this.effect({
@@ -582,16 +631,8 @@ export class GameSession implements CombatHost {
   }
 
   private resolvePlayerAttack(event: Extract<PlayerEvent, { type: 'attackActive' }>): void {
-    const { config } = this;
     const attack = this.player.attack;
     if (attack?.attackId !== event.attackId) return;
-    if (
-      attack.hitTargets.length === 0 &&
-      event.kind === 'skill' &&
-      attack.elapsed <= config.combat.skill.startup + FIXED_STEP_SECONDS
-    ) {
-      this.effect({ kind: 'skillBurst', position: this.player.position });
-    }
     if (
       attack.hitTargets.length === 0 &&
       event.volume.type !== 'sphere' &&
@@ -1045,23 +1086,61 @@ export class GameSession implements CombatHost {
     return Math.min(1, p.chargeTime / p.action.spec.maxTime);
   }
 
+  /** 実行中の技のスタイル。技の実行中でなければ右腕のスタイル(表示・イベントの既定)。 */
+  private activeStyle(): AttackStyleDefinition {
+    return this.styles[this.player.techniqueSlot ?? 'rightArm'];
+  }
+
+  /** 今ステップに状態機械へ渡すスロット。実行中の技のスロットを優先し、無ければ入力のあるスロットを優先順で選ぶ。 */
+  private pickInputSlot(input: FrameInput): EquipmentSlot {
+    const active = this.player.techniqueSlot;
+    if (active !== null) return active;
+    for (const slot of SLOT_PRIORITY) {
+      const t = input.techniques[slot];
+      if (t.press || t.holdStart || t.holdEnd) return slot;
+    }
+    return 'rightArm';
+  }
+
+  private techniqueHud(slot: EquipmentSlot): TechniqueHudView {
+    const style = this.styles[slot];
+    const ammo = this.player.ammo[slot];
+    return {
+      id: style.id,
+      name: style.name,
+      shortName: shortStyleName(style.name),
+      category: style.category,
+      fallbackFrom: this.styleFallbackFrom[slot],
+      ammo: ammo
+        ? {
+            remaining: ammo.remaining,
+            capacity: ammo.capacity,
+            reloading: ammo.reloadRemaining > 0,
+          }
+        : null,
+    };
+  }
+
   private styleHud(): StyleHudView {
     const p = this.player;
-    const style = this.currentStyle;
-    const rolled = this.rolledStyleId ? findAttackStyle(this.rolledStyleId) : null;
+    const slot = p.techniqueSlot ?? 'rightArm';
+    const style = this.styles[slot];
+    const rolledId = this.rolledStyleId[slot];
+    const rolled = rolledId ? findAttackStyle(rolledId) : null;
     const momentum = findBuff(p, 'momentum');
     const rhythm = findBuff(p, 'rhythm');
+    const ammo = p.ammo[slot];
     return {
       id: style.id,
       name: style.name,
       category: style.category,
-      fallbackFrom: this.styleFallbackFrom,
+      fallbackFrom: this.styleFallbackFrom[slot],
       rolledName: style.id === 'roulette' && rolled ? rolled.name : null,
-      ammo: p.ammo
+      ammo: ammo
         ? {
-            remaining: p.ammo.remaining,
-            capacity: p.ammo.capacity,
-            reloading: p.ammo.reloadRemaining > 0,
+            remaining: ammo.remaining,
+            capacity: ammo.capacity,
+            reloading: ammo.reloadRemaining > 0,
           }
         : null,
       hitCount: momentum ? momentum.stacks : null,
@@ -1101,8 +1180,13 @@ export class GameSession implements CombatHost {
       defeatProgress:
         p.name === 'dead' ? Math.min(1, p.stateTime / config.hitReaction.playerDefeatAnimTime) : 0,
       chargeRatio: this.chargeRatio(),
-      styleId: this.currentStyle.id,
-      styleCategory: this.currentStyle.category,
+      styleId: this.activeStyle().id,
+      styleCategory: this.activeStyle().category,
+      equipment: {
+        head: { styleId: this.styles.head.id, category: this.styles.head.category },
+        rightArm: { styleId: this.styles.rightArm.id, category: this.styles.rightArm.category },
+        leftArm: { styleId: this.styles.leftArm.id, category: this.styles.leftArm.category },
+      },
       guarding: p.name === 'guard' && p.action?.phase === 'guard',
       chargeCameraDistance:
         p.name === 'charge' && p.action?.spec.kind === 'charge'
@@ -1138,14 +1222,13 @@ export class GameSession implements CombatHost {
       phase: this.phase,
       countdownLabel: this.countdownLabel(),
       buttons: this.buttonStates(),
-      skillCooldownRatio: cooldownRatio(this.skillCooldown),
-      skillCooldownLabel: remainingSecondsLabel(this.skillCooldown),
       energyRatio: energyRatio(this.energy),
       energyFull: isEnergyFull(this.energy),
       energy: this.energy.value,
       energyMax: this.energy.max,
       energyShort: this.worldTime < this.energyShortUntil,
       chargeRatio: this.chargeRatio(),
+      activeTechniqueSlot: p.techniqueSlot,
       indicator: p.name === 'climb' ? 'climb' : p.name === 'glide' ? 'glide' : null,
       interactTargetName: this.interactTarget()?.name ?? null,
       interactTargetPosition: this.interactTarget()?.position ?? null,
@@ -1153,6 +1236,11 @@ export class GameSession implements CombatHost {
       result: this.result,
       stats: this.stats,
       recentPlayerDamage: recent,
+      techniques: {
+        head: this.techniqueHud('head'),
+        rightArm: this.techniqueHud('rightArm'),
+        leftArm: this.techniqueHud('leftArm'),
+      },
       style: this.styleHud(),
     };
     return {

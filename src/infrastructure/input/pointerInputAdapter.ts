@@ -102,7 +102,7 @@ export class PointerInputAdapter {
 
   private onMouseDown(e: PointerEvent): void {
     if (e.button === 0) {
-      this.queue.push({ type: 'AttackPressed' });
+      this.queue.push({ type: 'RightArmPressed' });
       return;
     }
     if (e.button === 2) {

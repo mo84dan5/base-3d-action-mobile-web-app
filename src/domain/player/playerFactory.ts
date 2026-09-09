@@ -40,6 +40,7 @@ export function createPlayer(position: Vec3, yaw: number, config: GameConfig): P
     attackCounter: 0,
     pendingHit: null,
     buffs: [],
-    ammo: null,
+    ammo: { head: null, rightArm: null, leftArm: null },
+    techniqueSlot: null,
   };
 }

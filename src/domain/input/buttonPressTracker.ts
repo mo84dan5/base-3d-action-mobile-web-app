@@ -12,11 +12,13 @@ import type { InputCommand } from './inputCommand';
 //
 // 時刻はすべて秒。
 
-export type ButtonKind = 'attack' | 'skill' | 'burst' | 'jump' | 'sprint' | 'interact' | 'pause';
+export type ButtonKind =
+  'attack' | 'leftArm' | 'head' | 'burst' | 'jump' | 'sprint' | 'interact' | 'pause';
 
 export const BUTTON_KINDS: readonly ButtonKind[] = [
   'attack',
-  'skill',
+  'leftArm',
+  'head',
   'burst',
   'jump',
   'sprint',
@@ -25,8 +27,9 @@ export const BUTTON_KINDS: readonly ButtonKind[] = [
 ];
 
 const PRESS_COMMAND: Readonly<Record<ButtonKind, InputCommand>> = {
-  attack: { type: 'AttackPressed' },
-  skill: { type: 'SkillPressed' },
+  attack: { type: 'RightArmPressed' },
+  leftArm: { type: 'LeftArmPressed' },
+  head: { type: 'HeadPressed' },
   burst: { type: 'BurstPressed' },
   jump: { type: 'JumpPressed' },
   sprint: { type: 'DashPressed' },
@@ -37,8 +40,9 @@ const PRESS_COMMAND: Readonly<Record<ButtonKind, InputCommand>> = {
 const HOLD_COMMANDS: Partial<
   Readonly<Record<ButtonKind, { readonly start: InputCommand; readonly end: InputCommand }>>
 > = {
-  attack: { start: { type: 'AttackHoldStart' }, end: { type: 'AttackHoldEnd' } },
-  skill: { start: { type: 'SkillHoldStart' }, end: { type: 'SkillHoldEnd' } },
+  attack: { start: { type: 'RightArmHoldStart' }, end: { type: 'RightArmHoldEnd' } },
+  leftArm: { start: { type: 'LeftArmHoldStart' }, end: { type: 'LeftArmHoldEnd' } },
+  head: { start: { type: 'HeadHoldStart' }, end: { type: 'HeadHoldEnd' } },
   sprint: { start: { type: 'SprintHoldStart' }, end: { type: 'SprintHoldEnd' } },
 };
 

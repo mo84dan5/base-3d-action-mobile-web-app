@@ -1,3 +1,4 @@
+import { DEFAULT_EQUIPMENT } from '../equipment/equipment';
 import { describe, expect, it } from 'vitest';
 import {
   SETTINGS_STORAGE_KEY,
@@ -45,7 +46,7 @@ describe('parseSettings(F06 読み込み)', () => {
       invertCameraY: true,
       invertCameraX: true,
       stickMode: 'fixed' as const,
-      attackStyle: 'gun' as const,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'gun' } as const,
       quality: 'high' as const,
       showFps: true,
     };
@@ -142,25 +143,37 @@ describe('qualityPreset(F06 表示品質プリセット)', () => {
   });
 });
 
-describe('attackStyle(F06 / F11)', () => {
-  it('キーが無い旧データでは格闘(melee)、"gun" は銃撃、F11 の ID はそのまま、未知の値は格闘', () => {
-    expect(parseSettings(JSON.stringify({ version: 1 })).attackStyle).toBe('melee');
-    expect(parseSettings(JSON.stringify({ version: 1, attackStyle: 'gun' })).attackStyle).toBe(
-      'gun',
-    );
-    expect(parseSettings(JSON.stringify({ version: 1, attackStyle: 'laser' })).attackStyle).toBe(
-      'laser',
-    );
+describe('equipment(F06 / F12)', () => {
+  it('キーが無い旧データでは既定(頭 laser / 右腕 melee / 左腕 shockwave)', () => {
+    expect(parseSettings(JSON.stringify({ version: 1 })).equipment).toEqual(DEFAULT_EQUIPMENT);
+  });
+  it('旧 attackStyle だけのデータは右腕へ移行し、未知の値は既定に戻す', () => {
+    expect(parseSettings(JSON.stringify({ version: 1, attackStyle: 'gun' })).equipment).toEqual({
+      ...DEFAULT_EQUIPMENT,
+      rightArm: 'gun',
+    });
     expect(
-      parseSettings(JSON.stringify({ version: 1, attackStyle: 'no_such_style' })).attackStyle,
-    ).toBe('melee');
-    expect(parseSettings(JSON.stringify({ version: 1, attackStyle: 42 })).attackStyle).toBe(
-      'melee',
+      parseSettings(JSON.stringify({ version: 1, attackStyle: 'no_such_style' })).equipment,
+    ).toEqual(DEFAULT_EQUIPMENT);
+    expect(parseSettings(JSON.stringify({ version: 1, attackStyle: 42 })).equipment).toEqual(
+      DEFAULT_EQUIPMENT,
     );
   });
-  it('直列化に attackStyle が含まれる', () => {
-    expect(serializeSettings({ ...defaultSettings, attackStyle: 'gun' })).toContain(
-      '"attackStyle":"gun"',
+  it('equipment はスロットごとに読み、未知の ID はそのスロットの既定に戻す', () => {
+    const parsed = parseSettings(
+      JSON.stringify({
+        version: 1,
+        equipment: { head: 'bow', rightArm: 'laser', leftArm: 'nope' },
+      }),
     );
+    expect(parsed.equipment).toEqual({ head: 'bow', rightArm: 'laser', leftArm: 'shockwave' });
+  });
+  it('直列化に equipment が含まれ、attackStyle は含まれない', () => {
+    const raw = serializeSettings({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'gun' },
+    });
+    expect(raw).toContain('"rightArm":"gun"');
+    expect(raw).not.toContain('attackStyle');
   });
 });

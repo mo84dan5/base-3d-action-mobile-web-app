@@ -23,12 +23,16 @@ import {
 
 // A3 ヒットスキャン(F04 射撃・タメ打ち / F11)。射線は application が敵カプセルと交差判定する。
 
-function withAmmo(p: PlayerState, spec: HitscanSpec): PlayerState {
+function withAmmo(p: PlayerState, ctx: Ctx, spec: HitscanSpec): PlayerState {
   if (!spec.ammo) return p;
-  if (p.ammo?.capacity === spec.ammo.capacity) return p;
+  const slot = ctx.input.slot;
+  if (p.ammo[slot]?.capacity === spec.ammo.capacity) return p;
   return {
     ...p,
-    ammo: { remaining: spec.ammo.capacity, capacity: spec.ammo.capacity, reloadRemaining: 0 },
+    ammo: {
+      ...p.ammo,
+      [slot]: { remaining: spec.ammo.capacity, capacity: spec.ammo.capacity, reloadRemaining: 0 },
+    },
   };
 }
 
@@ -39,16 +43,21 @@ export function startHitscan(
   opts: StartActionOptions,
 ): PlayerState | null {
   if (!p.grounded && !spec.airborne) return null;
-  p = withAmmo(p, spec);
-  if (spec.ammo && p.ammo) {
-    if (p.ammo.reloadRemaining > 0) {
+  p = withAmmo(p, ctx, spec);
+  const slot = ctx.input.slot;
+  const ammo = p.ammo[slot];
+  if (spec.ammo && ammo) {
+    if (ammo.reloadRemaining > 0) {
       ctx.events.push({ type: 'actionRejected', reason: 'ammo' });
       return null;
     }
-    if (p.ammo.remaining <= 0) {
+    if (ammo.remaining <= 0) {
       ctx.events.push({ type: 'reloadStarted', seconds: spec.ammo.reloadTime });
       ctx.events.push({ type: 'actionRejected', reason: 'ammo' });
-      return { ...p, ammo: { ...p.ammo, reloadRemaining: spec.ammo.reloadTime } };
+      return {
+        ...p,
+        ammo: { ...p.ammo, [slot]: { ...ammo, reloadRemaining: spec.ammo.reloadTime } },
+      };
     }
   }
   const targets = spec.target
@@ -133,11 +142,18 @@ export function stepHitscan(p: PlayerState, ctx: Ctx): PlayerState {
     fire(next, ctx, spec);
     hits++;
     nextAt += interval;
-    if (spec.ammo && next.ammo) {
-      const remaining = Math.max(0, next.ammo.remaining - 1);
+    const slotAmmo = next.ammo[ctx.input.slot];
+    if (spec.ammo && slotAmmo) {
+      const remaining = Math.max(0, slotAmmo.remaining - 1);
       const reload = remaining === 0 ? spec.ammo.reloadTime : 0;
       if (reload > 0) ctx.events.push({ type: 'reloadStarted', seconds: reload });
-      next = { ...next, ammo: { ...next.ammo, remaining, reloadRemaining: reload } };
+      next = {
+        ...next,
+        ammo: {
+          ...next.ammo,
+          [ctx.input.slot]: { ...slotAmmo, remaining, reloadRemaining: reload },
+        },
+      };
       if (remaining === 0) hits = shots;
     }
   }

@@ -6,12 +6,15 @@ export type InputCommand =
   | { readonly type: 'Look'; readonly dx: number; readonly dy: number }
   | { readonly type: 'LookEnd' }
   | { readonly type: 'Zoom'; readonly delta: number }
-  | { readonly type: 'AttackPressed' }
-  | { readonly type: 'AttackHoldStart' }
-  | { readonly type: 'AttackHoldEnd' }
-  | { readonly type: 'SkillPressed' }
-  | { readonly type: 'SkillHoldStart' }
-  | { readonly type: 'SkillHoldEnd' }
+  | { readonly type: 'RightArmPressed' }
+  | { readonly type: 'RightArmHoldStart' }
+  | { readonly type: 'RightArmHoldEnd' }
+  | { readonly type: 'LeftArmPressed' }
+  | { readonly type: 'LeftArmHoldStart' }
+  | { readonly type: 'LeftArmHoldEnd' }
+  | { readonly type: 'HeadPressed' }
+  | { readonly type: 'HeadHoldStart' }
+  | { readonly type: 'HeadHoldEnd' }
   | { readonly type: 'BurstPressed' }
   | { readonly type: 'JumpPressed' }
   | { readonly type: 'DashPressed' }
@@ -27,6 +30,7 @@ export const FRAME_COMMAND_PRIORITY: readonly InputCommandType[] = [
   'JumpPressed',
   'DashPressed',
   'BurstPressed',
-  'SkillPressed',
-  'AttackPressed',
+  'HeadPressed',
+  'LeftArmPressed',
+  'RightArmPressed',
 ];

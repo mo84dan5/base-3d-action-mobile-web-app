@@ -56,6 +56,7 @@ import {
   type MoveResult,
 } from './playerPhysics';
 import type { ActiveBuff, PlayerState, PlayerStateName } from './playerState';
+import type { AmmoState } from './playerState';
 import {
   airControl,
   applyGravity,
@@ -89,7 +90,7 @@ export interface PlayerStepResult {
 
 // ---- 遷移 -------------------------------------------------------------
 
-function startSpecial(p: PlayerState, ctx: Ctx, name: 'skill' | 'burst'): PlayerState {
+function startSpecial(p: PlayerState, ctx: Ctx, name: 'burst'): PlayerState {
   const attackId = p.attackCounter + 1;
   ctx.events.push({ type: 'attackStarted', kind: name, stage: 1, action: null, styleId: null });
   return {
@@ -181,7 +182,6 @@ function stepGroundLocomotion(p: PlayerState, ctx: Ctx): PlayerState {
   if (input.dash && !isStaminaEmpty(p.stamina)) return startDash(p, ctx);
   if (input.actionsAllowed) {
     if (input.burst) return startSpecial(p, ctx, 'burst');
-    if (input.skill) return startSpecial(p, ctx, 'skill');
     if (input.attackHoldStart) {
       const held = startHold(p, ctx);
       if (held) return held;
@@ -524,13 +524,13 @@ function followWall(p: PlayerState, ctx: Ctx, normal: Vec3): PlayerState {
   };
 }
 
-/** スキル・バースト(F03 / F04。設定値で固定の範囲攻撃)。 */
+/** バースト(F03 / F04。設定値で固定の範囲攻撃。固定スキルは F12 で廃止)。 */
 function stepSpecial(p: PlayerState, ctx: Ctx): PlayerState {
   const attack = p.attack;
   if (!attack) return enter(p, 'idle');
   const { config, dt } = ctx;
-  const kind: AttackKind = p.name === 'burst' ? 'burst' : 'skill';
-  const timing = kind === 'burst' ? config.combat.burst : config.combat.skill;
+  const kind: AttackKind = 'burst';
+  const timing = config.combat.burst;
   const elapsed = attack.elapsed + dt;
   let next: PlayerState = { ...p, stateTime: p.stateTime + dt, attack: { ...attack, elapsed } };
   if (attackPhase(elapsed, timing) === 'active') {
@@ -611,7 +611,6 @@ function dispatch(p: PlayerState, ctx: Ctx): PlayerState {
       return stepCombo(p, ctx);
     case 'airAttack':
       return stepAirCombo(p, ctx);
-    case 'skill':
     case 'burst':
       return stepSpecial(p, ctx);
     case 'strongAttack':
@@ -658,12 +657,17 @@ function tickBuffs(buffs: readonly ActiveBuff[], dt: number): readonly ActiveBuf
 }
 
 function tickTimers(p: PlayerState, dt: number): PlayerState {
-  const ammo =
-    p.ammo && p.ammo.reloadRemaining > 0
-      ? p.ammo.reloadRemaining - dt <= 0
-        ? { ...p.ammo, remaining: p.ammo.capacity, reloadRemaining: 0 }
-        : { ...p.ammo, reloadRemaining: p.ammo.reloadRemaining - dt }
-      : p.ammo;
+  const tickAmmo = (a: AmmoState | null): AmmoState | null =>
+    a && a.reloadRemaining > 0
+      ? a.reloadRemaining - dt <= 0
+        ? { ...a, remaining: a.capacity, reloadRemaining: 0 }
+        : { ...a, reloadRemaining: a.reloadRemaining - dt }
+      : a;
+  const ammo = {
+    head: tickAmmo(p.ammo.head),
+    rightArm: tickAmmo(p.ammo.rightArm),
+    leftArm: tickAmmo(p.ammo.leftArm),
+  };
   return {
     ...p,
     invincibleRemaining: Math.max(0, p.invincibleRemaining - dt),
@@ -707,6 +711,10 @@ export function stepPlayer(
   dt: number,
   config: GameConfig,
 ): PlayerStepResult {
+  // 実行中の技と別スロットの技の入力は中断せず捨てる(F12)
+  if (player.techniqueSlot !== null && input.slot !== player.techniqueSlot) {
+    input = { ...input, attack: false, attackHoldStart: false, attackHoldEnd: false };
+  }
   if (dt <= 0) return { player: stepFrozen(player, input), events: [] };
   // ヒットストップ中に保持した長押し開始 / 終了をこのステップの入力に合流させる
   const buffered = player.bufferedAttackHold;

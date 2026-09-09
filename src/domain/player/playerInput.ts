@@ -1,3 +1,4 @@
+import type { EquipmentSlot } from '../equipment/equipment';
 import type { AttackStyleDefinition, TargetCone } from '../attackStyle/actionSpec';
 import { defaultAttackStyle } from '../attackStyle/attackStyleCatalog';
 import type { ConeTarget } from '../combat/hitGeometry';
@@ -11,7 +12,6 @@ export interface PlayerStepInput {
   readonly jump: boolean;
   readonly dash: boolean;
   readonly attack: boolean;
-  readonly skill: boolean;
   readonly burst: boolean;
   readonly sprintHoldStart: boolean;
   readonly sprintHoldEnd: boolean;
@@ -19,7 +19,9 @@ export interface PlayerStepInput {
   readonly attackHoldEnd: boolean;
   /** 開始カウントダウン中は false(攻撃・スキル・バースト無効) */
   readonly actionsAllowed: boolean;
-  /** 現在の攻撃スタイル定義(F11。application が設定 ID から解決する) */
+  /** 今ステップの技の入力(attack / attackHoldStart / attackHoldEnd)が属するスロット(F12) */
+  readonly slot: EquipmentSlot;
+  /** そのスロットの攻撃スタイル定義(F11。application が設定 ID から解決する) */
   readonly style: AttackStyleDefinition;
   /** 現在のエネルギー(F03。コストの判定に使う) */
   readonly energy: number;
@@ -39,13 +41,13 @@ export const NO_INPUT: PlayerStepInput = {
   jump: false,
   dash: false,
   attack: false,
-  skill: false,
   burst: false,
   sprintHoldStart: false,
   sprintHoldEnd: false,
   attackHoldStart: false,
   attackHoldEnd: false,
   actionsAllowed: true,
+  slot: 'rightArm',
   style: defaultAttackStyle(),
   energy: 0,
   random: 0,

@@ -1,11 +1,12 @@
 import { findAttackStyle } from '../attackStyle/attackStyleCatalog';
+import { DEFAULT_EQUIPMENT, readEquipment, type Equipment } from '../equipment/equipment';
 import { clamp } from '../math/vec3';
 
 // 設定と永続化(F06)。localStorage の読み書きは infrastructure が行い、本モジュールは検証・移行・直列化のみを担う。
 
 export type StickMode = 'floating' | 'fixed';
 export type Quality = 'low' | 'medium' | 'high';
-/** 攻撃スタイル(F04 / F11): カタログのスタイル ID。未知・未実装の ID は読み込み時に melee へ戻す */
+/** 攻撃スタイル(F04 / F11): カタログのスタイル ID */
 export type AttackStyle = string;
 
 export interface Settings {
@@ -13,7 +14,8 @@ export interface Settings {
   readonly invertCameraY: boolean;
   readonly invertCameraX: boolean;
   readonly stickMode: StickMode;
-  readonly attackStyle: AttackStyle;
+  /** 装備(F12): 頭・右腕・左腕のスタイル ID。旧 `attackStyle` は読み込み時に右腕へ移行する */
+  readonly equipment: Equipment;
   readonly quality: Quality;
   readonly showFps: boolean;
 }
@@ -30,7 +32,7 @@ export const defaultSettings: Settings = {
   invertCameraY: false,
   invertCameraX: false,
   stickMode: 'floating',
-  attackStyle: 'melee',
+  equipment: DEFAULT_EQUIPMENT,
   quality: 'medium',
   showFps: false,
 };
@@ -86,9 +88,7 @@ function fieldsFrom(data: Record<string, unknown>): Settings {
     invertCameraY: readBoolean(data.invertCameraY, defaultSettings.invertCameraY),
     invertCameraX: readBoolean(data.invertCameraX, defaultSettings.invertCameraX),
     stickMode: readEnum(data.stickMode, STICK_MODES, defaultSettings.stickMode),
-    attackStyle: isKnownAttackStyle(data.attackStyle)
-      ? data.attackStyle
-      : defaultSettings.attackStyle,
+    equipment: readEquipment(data.equipment, data.attackStyle),
     quality: readEnum(data.quality, QUALITIES, defaultSettings.quality),
     showFps: readBoolean(data.showFps, defaultSettings.showFps),
   };

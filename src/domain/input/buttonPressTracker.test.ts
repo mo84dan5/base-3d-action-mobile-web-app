@@ -14,8 +14,9 @@ describe('ButtonPressTracker 押下(F03)', () => {
   });
   it('各ボタンが対応する押下コマンドを出す', () => {
     const cases = [
-      ['attack', 'AttackPressed'],
-      ['skill', 'SkillPressed'],
+      ['attack', 'RightArmPressed'],
+      ['leftArm', 'LeftArmPressed'],
+      ['head', 'HeadPressed'],
       ['burst', 'BurstPressed'],
       ['jump', 'JumpPressed'],
       ['interact', 'InteractPressed'],
@@ -31,7 +32,7 @@ describe('ButtonPressTracker 押下(F03)', () => {
     const t = tracker('attack');
     t.press(0);
     expect(t.press(0.05)).toEqual({ consumed: true, accepted: false });
-    expect(t.flush(0.05)).toEqual([{ type: 'AttackPressed' }]);
+    expect(t.flush(0.05)).toEqual([{ type: 'RightArmPressed' }]);
   });
 });
 
@@ -58,11 +59,11 @@ describe('ButtonPressTracker 長押し(F03 200 ms 境界)', () => {
     t.flush(0);
     expect(t.release()).toEqual([]);
   });
-  it('スキルは SkillHoldStart / SkillHoldEnd を出す', () => {
-    const t = tracker('skill');
+  it('左腕は LeftArmHoldStart / LeftArmHoldEnd を出す', () => {
+    const t = tracker('leftArm');
     t.press(0);
-    expect(t.flush(0.2)).toEqual([{ type: 'SkillPressed' }, { type: 'SkillHoldStart' }]);
-    expect(t.release()).toEqual([{ type: 'SkillHoldEnd' }]);
+    expect(t.flush(0.2)).toEqual([{ type: 'LeftArmPressed' }, { type: 'LeftArmHoldStart' }]);
+    expect(t.release()).toEqual([{ type: 'LeftArmHoldEnd' }]);
   });
   it('ジャンプ・バースト・インタラクト・ポーズは 1 秒押しても長押しイベントを出さない', () => {
     for (const kind of ['jump', 'burst', 'interact', 'pause'] as const) {
@@ -101,7 +102,7 @@ describe('ButtonPressTracker 強制解放(F03 / F09 キャンセル)', () => {
 
 describe('ButtonPressTracker 無効状態と出現直後ロック(F03)', () => {
   it('無効ボタンの押下はポインタを消費するがコマンドを出さない', () => {
-    const t = tracker('skill');
+    const t = tracker('leftArm');
     t.setEnabled(false);
     expect(t.press(0)).toEqual({ consumed: true, accepted: false });
     expect(t.flush(0)).toEqual([]);
@@ -121,7 +122,7 @@ describe('ButtonInputSet', () => {
     const set = new ButtonInputSet(defaultConfig.action);
     set.press('sprint', 0);
     set.flush(0.2);
-    set.press('skill', 0.25);
+    set.press('leftArm', 0.25);
     set.press('jump', 0.25);
     expect(set.cancelAll()).toEqual([{ type: 'SprintHoldEnd' }]);
     expect(set.flush(0.3)).toEqual([]);
@@ -130,7 +131,7 @@ describe('ButtonInputSet', () => {
     const set = new ButtonInputSet(defaultConfig.action);
     set.press('jump', 0);
     set.press('attack', 0);
-    expect(set.flush(0)).toEqual([{ type: 'AttackPressed' }, { type: 'JumpPressed' }]);
+    expect(set.flush(0)).toEqual([{ type: 'RightArmPressed' }, { type: 'JumpPressed' }]);
   });
   it('setEnabled / lockFor が対象ボタンに反映される', () => {
     const set = new ButtonInputSet(defaultConfig.action);
@@ -145,11 +146,11 @@ describe('攻撃ボタンの長押し(F03 追記)', () => {
   it('200 ms で AttackHoldStart、離すと AttackHoldEnd、キャンセルでは HoldEnd のみで押下は破棄', () => {
     const t = new ButtonPressTracker('attack', 0.2);
     t.press(0);
-    expect(t.flush(0.1).map((c) => c.type)).toEqual(['AttackPressed']);
-    expect(t.flush(0.2).map((c) => c.type)).toEqual(['AttackHoldStart']);
-    expect(t.release().map((c) => c.type)).toEqual(['AttackHoldEnd']);
+    expect(t.flush(0.1).map((c) => c.type)).toEqual(['RightArmPressed']);
+    expect(t.flush(0.2).map((c) => c.type)).toEqual(['RightArmHoldStart']);
+    expect(t.release().map((c) => c.type)).toEqual(['RightArmHoldEnd']);
     t.press(1);
-    expect(t.flush(1.25).map((c) => c.type)).toEqual(['AttackPressed', 'AttackHoldStart']);
-    expect(t.cancel().map((c) => c.type)).toEqual(['AttackHoldEnd']);
+    expect(t.flush(1.25).map((c) => c.type)).toEqual(['RightArmPressed', 'RightArmHoldStart']);
+    expect(t.cancel().map((c) => c.type)).toEqual(['RightArmHoldEnd']);
   });
 });

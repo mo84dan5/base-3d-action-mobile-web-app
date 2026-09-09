@@ -104,7 +104,7 @@ export function applyGround(p: PlayerState, r: MoveResult): PlayerState {
 
 /** 行動を終えて素の状態へ戻すときに消すフィールド。 */
 export function clearAction(p: PlayerState): PlayerState {
-  return { ...p, attack: null, strong: null, action: null };
+  return { ...p, attack: null, strong: null, action: null, techniqueSlot: null };
 }
 
 export function startJump(

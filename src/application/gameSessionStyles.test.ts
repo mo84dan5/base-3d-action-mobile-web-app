@@ -1,3 +1,4 @@
+import { DEFAULT_EQUIPMENT } from '../domain/equipment/equipment';
 import { describe, expect, it } from 'vitest';
 import { ATTACK_STYLES } from '../domain/attackStyle/attackStyleCatalog';
 import { defaultConfig } from '../domain/config/gameConfig';
@@ -56,14 +57,17 @@ class Harness {
 
 describe('エネルギーバー(S02 要素 18)', () => {
   it('HUD にエネルギーの現在値 / 最大値が出て、魔力弾で消費すると減る', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'magic_bolt' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'magic_bolt' },
+    });
     h.session.energy = { ...h.session.energy, value: h.session.energy.max };
     let hud = h.session.view().hud;
     expect(hud.energy).toBe(100);
     expect(hud.energyMax).toBe(100);
     expect(hud.energyFull).toBe(true);
     expect(hud.energyShort).toBe(false);
-    h.step([{ type: 'AttackPressed' }]);
+    h.step([{ type: 'RightArmPressed' }]);
     h.run(0.2);
     hud = h.session.view().hud;
     expect(hud.energy).toBe(97);
@@ -71,9 +75,12 @@ describe('エネルギーバー(S02 要素 18)', () => {
   });
 
   it('エネルギー不足で発動できないと energyShort が 0.4 秒間 true になり、効果音は rejected_energy', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'magic_bolt' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'magic_bolt' },
+    });
     h.session.energy = { ...h.session.energy, value: 0 };
-    h.step([{ type: 'AttackPressed' }]);
+    h.step([{ type: 'RightArmPressed' }]);
     expect(h.session.view().hud.energyShort).toBe(true);
     expect(h.effects.some((e) => e.kind === 'sound' && e.name === 'rejected_energy')).toBe(true);
     h.run(0.5);
@@ -81,12 +88,15 @@ describe('エネルギーバー(S02 要素 18)', () => {
   });
 
   it('スタミナ切れの拒否は energyShort にならない', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'greatsword' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'greatsword' },
+    });
     h.session.player = {
       ...h.session.player,
       stamina: { ...h.session.player.stamina, value: 0 },
     };
-    h.step([{ type: 'AttackHoldStart' }]);
+    h.step([{ type: 'RightArmHoldStart' }]);
     expect(h.session.view().hud.energyShort).toBe(false);
   });
 });
@@ -97,21 +107,27 @@ describe('1 行動 1 形(エフェクトの重なり解消)', () => {
     h.effects.flatMap((e) => (e.kind === 'attackSwing' ? [e.shape] : []));
 
   it('回転斬りの押下: 判定の形(リング)は攻撃 ID ごとに 1 回だけで、振りには shape=ring が付く', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'spin_slash' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'spin_slash' },
+    });
     h.session.enemies.length = 0;
-    h.step([{ type: 'AttackPressed' }]);
+    h.step([{ type: 'RightArmPressed' }]);
     h.run(1.0);
     expect(volumes(h)).toHaveLength(1);
     expect(shapes(h)).toEqual(['ring']);
   });
 
   it('衝撃波の長押し(広がるリング)は最終半径 5 m で 1 回だけ描く', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'shockwave' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'shockwave' },
+    });
     h.session.enemies.length = 0;
     h.session.energy = { ...h.session.energy, value: h.session.energy.max };
-    h.step([{ type: 'AttackHoldStart' }]);
+    h.step([{ type: 'RightArmHoldStart' }]);
     h.run(0.5);
-    h.step([{ type: 'AttackHoldEnd' }]);
+    h.step([{ type: 'RightArmHoldEnd' }]);
     h.run(1.5);
     const v = volumes(h);
     expect(v).toHaveLength(1);
@@ -122,9 +138,12 @@ describe('1 行動 1 形(エフェクトの重なり解消)', () => {
   });
 
   it('格闘の押下(球判定)は振りだけで、判定の形は描かない', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'melee' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'melee' },
+    });
     h.session.enemies.length = 0;
-    h.step([{ type: 'AttackPressed' }]);
+    h.step([{ type: 'RightArmPressed' }]);
     h.run(0.6);
     expect(volumes(h)).toHaveLength(0);
     expect(shapes(h)).toEqual(['sphere']);
@@ -133,11 +152,14 @@ describe('1 行動 1 形(エフェクトの重なり解消)', () => {
 
 describe('回転攻撃の表示回転(F11)', () => {
   it('回転斬りの長押し中は spinRate が正で、終わると 0 に戻る', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'spin_slash' });
-    h.step([{ type: 'AttackHoldStart' }]);
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'spin_slash' },
+    });
+    h.step([{ type: 'RightArmHoldStart' }]);
     h.run(0.1, []);
     expect(h.session.view().player.spinRate).toBeGreaterThan(0);
-    h.step([{ type: 'AttackHoldEnd' }]);
+    h.step([{ type: 'RightArmHoldEnd' }]);
     h.run(2.0);
     expect(h.session.view().player.spinRate).toBe(0);
   });
@@ -149,16 +171,19 @@ const NO_DAMAGE_EXPECTED = new Set(['decoy', 'magic_wall']);
 describe('F11 攻撃スタイル 100 案(セッション)', () => {
   for (const style of ATTACK_STYLES) {
     it(`${style.id}(${style.name}): 押下と長押しが例外なく進み、敵にダメージが入る`, () => {
-      const h = new Harness({ ...defaultSettings, attackStyle: style.id });
+      const h = new Harness({
+        ...defaultSettings,
+        equipment: { ...DEFAULT_EQUIPMENT, rightArm: style.id },
+      });
       const before = h.totalHp();
       // エネルギーが要るスタイルのために満タンにしておく
       h.session.energy = { ...h.session.energy, value: h.session.energy.max };
-      h.step([{ type: 'AttackPressed' }]);
+      h.step([{ type: 'RightArmPressed' }]);
       h.run(3.0);
       h.session.energy = { ...h.session.energy, value: h.session.energy.max };
-      h.step([{ type: 'AttackHoldStart' }]);
+      h.step([{ type: 'RightArmHoldStart' }]);
       h.run(0.4);
-      h.step([{ type: 'AttackHoldEnd' }]);
+      h.step([{ type: 'RightArmHoldEnd' }]);
       h.run(6.0);
       const view = h.session.view();
       expect(view.hud.style.id).toBe(style.id);
@@ -173,7 +198,10 @@ describe('F11 攻撃スタイル 100 案(セッション)', () => {
   }
 
   it('未知の ID は格闘へフォールバックし、HUD に元の ID を出す', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'no_such_style' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'no_such_style' },
+    });
     h.step();
     const view = h.session.view();
     expect(view.hud.style.id).toBe('melee');
@@ -182,9 +210,12 @@ describe('F11 攻撃スタイル 100 案(セッション)', () => {
   });
 
   it('time_stop: 長押しで半径 5 m の敵が 1 秒間止まる', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'time_stop' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'time_stop' },
+    });
     h.session.energy = { ...h.session.energy, value: 100 };
-    h.step([{ type: 'AttackHoldStart' }]);
+    h.step([{ type: 'RightArmHoldStart' }]);
     const frozen = h.session.enemies.filter((s) => s.state.frozenRemaining > 0);
     expect(frozen.length).toBe(2);
     const positions = h.session.enemies.map((s) => s.state.position);
@@ -197,7 +228,10 @@ describe('F11 攻撃スタイル 100 案(セッション)', () => {
   });
 
   it('parry: 敵の攻撃をガード窓で受けると被ダメ 0 でカウンターが出る', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'parry' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'parry' },
+    });
     // 敵が攻撃の発生(0.6 秒)に入るまで待ってからパリィ
     h.session.enemies = h.session.enemies.slice(0, 1);
     for (let i = 0; i < 60 * 8; i++) {
@@ -207,7 +241,7 @@ describe('F11 攻撃スタイル 100 案(セッション)', () => {
     }
     expect(h.session.enemies[0]?.state.ai).toBe('attack');
     const hpBefore = h.session.player.hp;
-    h.step([{ type: 'AttackHoldStart' }]);
+    h.step([{ type: 'RightArmHoldStart' }]);
     expect(h.session.player.name).toBe('guard');
     h.run(0.4);
     expect(h.session.player.hp).toBe(hpBefore);
@@ -216,9 +250,12 @@ describe('F11 攻撃スタイル 100 案(セッション)', () => {
   });
 
   it('mine: 置いた地雷に敵が近づくと爆発してダメージ', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'mine' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'mine' },
+    });
     h.session.energy = { ...h.session.energy, value: 100 };
-    h.step([{ type: 'AttackPressed' }]);
+    h.step([{ type: 'RightArmPressed' }]);
     h.run(0.2);
     expect(h.effects.some((e) => e.kind === 'placed' && e.object === 'mine')).toBe(true);
     h.run(3.0);
@@ -228,8 +265,11 @@ describe('F11 攻撃スタイル 100 案(セッション)', () => {
   });
 
   it('boomerang: 投げた弾は戻り、戻るまでの間は次を投げられない', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'boomerang' });
-    h.step([{ type: 'AttackPressed' }]);
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'boomerang' },
+    });
+    h.step([{ type: 'RightArmPressed' }]);
     h.run(0.3);
     expect(h.session.projectiles.projectiles.length).toBe(1);
     h.run(2.5);
@@ -237,9 +277,12 @@ describe('F11 攻撃スタイル 100 案(セッション)', () => {
   });
 
   it('familiar: 召喚した使い魔が敵を攻撃し、寿命で消える', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'familiar' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'familiar' },
+    });
     h.session.energy = { ...h.session.energy, value: 100 };
-    h.step([{ type: 'AttackPressed' }]);
+    h.step([{ type: 'RightArmPressed' }]);
     h.run(0.5);
     expect(h.session.summons.summons.length).toBe(1);
     const before = h.totalHp();
@@ -250,8 +293,11 @@ describe('F11 攻撃スタイル 100 案(セッション)', () => {
   });
 
   it('dart: 長押しの強化ダーツで継続ダメージが入る', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'dart' });
-    h.step([{ type: 'AttackHoldStart' }]);
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'dart' },
+    });
+    h.step([{ type: 'RightArmHoldStart' }]);
     h.run(0.3);
     const afterHit = h.totalHp();
     expect(h.session.enemies.some((s) => s.state.dot !== null)).toBe(true);
@@ -260,12 +306,15 @@ describe('F11 攻撃スタイル 100 案(セッション)', () => {
   });
 
   it('taunt: 長押しで半径 8 m の敵が追跡を始め、5 秒間 攻撃力が 1.5 倍', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'taunt' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'taunt' },
+    });
     h.session.energy = { ...h.session.energy, value: 100 };
-    h.step([{ type: 'AttackHoldStart' }]);
+    h.step([{ type: 'RightArmHoldStart' }]);
     expect(h.session.enemies.every((s) => s.state.tauntRemaining > 0)).toBe(true);
     h.run(0.6);
-    h.step([{ type: 'AttackPressed' }]);
+    h.step([{ type: 'RightArmPressed' }]);
     h.run(0.5);
     const hits = h.session.damageNumbers
       .filter((n) => n.targetId !== 'player')
@@ -274,7 +323,10 @@ describe('F11 攻撃スタイル 100 案(セッション)', () => {
   });
 
   it('被ダメ半減(鉄壁)中は敵の攻撃が 10 → 5 になる', () => {
-    const h = new Harness({ ...defaultSettings, attackStyle: 'iron_wall' });
+    const h = new Harness({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'iron_wall' },
+    });
     h.session.enemies = h.session.enemies.slice(0, 1);
     h.session.player = {
       ...h.session.player,

@@ -1,4 +1,5 @@
 import type { ActionSpec, BuffKind } from '../attackStyle/actionSpec';
+import type { EquipmentSlot } from '../equipment/equipment';
 import type { AttackKind } from '../hitReaction/hitTables';
 import type { Vec3 } from '../math/vec3';
 import type { StaminaState } from '../stamina/stamina';
@@ -19,7 +20,6 @@ export type PlayerStateName =
   | 'glide'
   | 'attack'
   | 'airAttack'
-  | 'skill'
   | 'burst'
   | 'strongAttack'
   | 'shoot'
@@ -182,7 +182,10 @@ export interface PlayerState {
   /** 一時的な能力変化(F11 N10) */
   readonly buffs: readonly ActiveBuff[];
   /** 装弾(リボルバー)。null は装弾の概念なし */
-  readonly ammo: AmmoState | null;
+  /** 残弾(リボルバー)はスロットごとに独立(F12) */
+  readonly ammo: Readonly<Record<EquipmentSlot, AmmoState | null>>;
+  /** 実行中の技のスロット。別スロットの技の入力は捨てる(F12)。行動が終わると null */
+  readonly techniqueSlot: EquipmentSlot | null;
 }
 
 export interface PendingPlayerHit {

@@ -65,7 +65,7 @@ describe('開始カウントダウン(S02 / F04)', () => {
     expect(h.session.view().hud.countdownLabel).toBe('2');
     h.run(2.0);
     expect(h.session.view().hud.countdownLabel).toBe('START');
-    h.step([{ type: 'AttackPressed' }]);
+    h.step([{ type: 'RightArmPressed' }]);
     expect(h.session.player.name).not.toBe('attack');
     expect(h.session.stats.clearTime).toBe(0);
     h.run(0.6);
@@ -80,7 +80,7 @@ describe('開始カウントダウン(S02 / F04)', () => {
   it('カウントダウン中は敵がダメージを受けない', () => {
     const h = new Harness();
     h.run(0.3, [move(0, 1)]);
-    h.run(0.6, [{ type: 'AttackPressed' }]);
+    h.run(0.6, [{ type: 'RightArmPressed' }]);
     expect(h.enemy(1).hp).toBe(config.enemy.dummyHp);
   });
 });
@@ -91,7 +91,7 @@ describe('攻撃コンボとダメージ(F04 / F10)', () => {
     h.skipCountdown();
     h.run(0.25, [move(0, 1)]);
     h.step([]);
-    for (let i = 0; i < 100; i++) h.step([{ type: 'AttackPressed' }]);
+    for (let i = 0; i < 100; i++) h.step([{ type: 'RightArmPressed' }]);
     const dummy = h.enemy(1);
     expect(dummy.hp).toBeLessThanOrEqual(200 - 35);
     expect(h.session.energy.value).toBeGreaterThanOrEqual(15);
@@ -107,7 +107,7 @@ describe('攻撃コンボとダメージ(F04 / F10)', () => {
       comboWindowRemaining: 0.5,
       position: vec3(0, 0, 1.5),
     };
-    h.step([{ type: 'AttackPressed' }]);
+    h.step([{ type: 'RightArmPressed' }]);
     expect(h.session.player.attack?.stage).toBe(3);
     let hitStep = -1;
     for (let i = 0; i < 30; i++) {
@@ -131,53 +131,35 @@ describe('攻撃コンボとダメージ(F04 / F10)', () => {
     const h = new Harness();
     h.skipCountdown();
     h.session.player = { ...h.session.player, position: vec3(0, 0, 1.5) };
-    for (let i = 0; i < 600; i++) h.step([{ type: 'AttackPressed' }]);
+    for (let i = 0; i < 600; i++) h.step([{ type: 'RightArmPressed' }]);
     const dummy = h.enemy(1);
     expect(dummy.ai).toBe('idle');
     expect(dummy.hp).toBeGreaterThan(0);
     expect(h.session.stats.defeated).toBe(0);
   });
-  it('スキルで半径 2.5 m 内の全敵に 30 ダメージが入り、クールダウン 8 秒が始まる', () => {
+  it('左腕ボタン(既定: 衝撃波)で半径 2 m のリングにダメージが入り、実行中は他スロットの技ボタンが無効になる(F12)', () => {
     const h = new Harness(
       layout({
         enemies: [
           { kind: 'patrol', position: vec3(2, 0, 0) },
           { kind: 'patrol', position: vec3(-2, 0, 0) },
-          { kind: 'dummy', position: vec3(0, 0, 5) },
+          { kind: 'dummy', position: vec3(0, 0, 8) },
         ],
       }),
     );
     h.skipCountdown();
-    h.step([{ type: 'SkillPressed' }]);
-    expect(h.session.player.name).toBe('skill');
-    expect(h.session.skillCooldown.remaining).toBeCloseTo(8, 5);
-    h.run(0.4);
-    expect(h.enemy(1).hp).toBe(30);
-    expect(h.enemy(2).hp).toBe(30);
-    expect(h.enemy(3).hp).toBe(200);
-    expect(h.session.energy.value).toBe(30);
-    expect(h.session.view().hud.buttons.skill.enabled).toBe(false);
-  });
-  it('スキルが 2 体に同時ヒットしてもプレイヤーのヒットストップは 4 ステップでシェイクは 1 回', () => {
-    const h = new Harness(
-      layout({
-        enemies: [
-          { kind: 'patrol', position: vec3(1.5, 0, 0) },
-          { kind: 'patrol', position: vec3(-1.5, 0, 0) },
-        ],
-      }),
-    );
-    h.skipCountdown();
-    h.step([{ type: 'SkillPressed' }]);
-    let max = 0;
-    for (let i = 0; i < 20; i++) {
-      h.step();
-      max = Math.max(max, h.session.player.hitstopSteps);
-    }
-    expect(max).toBe(4);
-    expect(h.session.camera.shake.amplitude).toBe(0.08);
-    const numbers = h.session.damageNumbers;
-    expect(numbers).toHaveLength(2);
+    h.session.energy = { value: 100, max: 100 };
+    const before = [h.enemy(1).hp, h.enemy(2).hp, h.enemy(3).hp];
+    h.step([{ type: 'LeftArmPressed' }]);
+    expect(h.session.player.techniqueSlot).toBe('leftArm');
+    const buttons = h.session.view().hud.buttons;
+    expect(buttons.attack.enabled).toBe(false);
+    expect(buttons.head.enabled).toBe(false);
+    h.run(0.6);
+    expect(h.enemy(1).hp).toBeLessThan(before[0] ?? 0);
+    expect(h.enemy(2).hp).toBeLessThan(before[1] ?? 0);
+    expect(h.enemy(3).hp).toBe(before[2]);
+    expect(h.session.player.techniqueSlot).toBeNull();
   });
   it('エネルギー 100% でバーストが有効になり、発動で 80 ダメージ・エネルギー 0・クールダウン 5 秒', () => {
     const h = new Harness(layout({ enemies: [{ kind: 'patrol', position: vec3(2, 0, 0) }] }));
