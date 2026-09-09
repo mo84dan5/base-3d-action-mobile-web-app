@@ -633,7 +633,9 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
     await tap(page, 'style-done');
     await expect(page.locator('[data-screen="styleSelect"]')).toBeHidden();
     await expect(page.locator('[data-screen="pause"]')).toBeVisible();
-    await expect(page.getByTestId('setting-equipment-rightArm')).toContainText('ショットガン(銃火器)');
+    await expect(page.getByTestId('setting-equipment-rightArm')).toContainText(
+      'ショットガン(銃火器)',
+    );
     await tap(page, 'resume');
     await expect(page.getByTestId('style-name')).toContainText('右: ショットガン');
   });
