@@ -151,6 +151,7 @@ export class ProjectileSystem {
       radius: p.spec.radius,
       styleId: p.styleId,
       returning: p.phase === 'return',
+      velocity: p.velocity,
     }));
   }
 }

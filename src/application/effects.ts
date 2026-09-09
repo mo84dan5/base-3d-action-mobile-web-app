@@ -104,8 +104,15 @@ export type EffectEvent =
       readonly to: Vec3;
       readonly charged: boolean;
       readonly chargeRatio: number;
+      /** 撃ったスタイル(武器別の言語)。設置物・召喚体の射線は省略(弾) */
+      readonly styleId?: string;
     }
-  | { readonly kind: 'muzzleFlash'; readonly position: Vec3; readonly yaw: number }
+  | {
+      readonly kind: 'muzzleFlash';
+      readonly position: Vec3;
+      readonly yaw: number;
+      readonly styleId?: string;
+    }
   | { readonly kind: 'lunge'; readonly position: Vec3; readonly yaw: number }
   | { readonly kind: 'skillTelegraph'; readonly position: Vec3 }
   | { readonly kind: 'skillBurst'; readonly position: Vec3 }

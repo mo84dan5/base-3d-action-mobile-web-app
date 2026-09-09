@@ -47,6 +47,8 @@ export interface ProjectileView {
   readonly radius: number;
   readonly styleId: string;
   readonly returning: boolean;
+  /** 速度(向きと軌跡の表示用) */
+  readonly velocity: Vec3;
 }
 
 export interface PlacedView {

@@ -74,6 +74,8 @@ export class GameApp {
   private keyboard: KeyboardInputAdapter | null = null;
   private watcher: OrientationWatcher | null = null;
 
+  /** デバッグ用の VFX 時間の減速率(1 = 通常) */
+  private vfxSlow = 1;
   constructor(private readonly root: HTMLElement) {
     // F06: WebGLRenderer 生成前に設定を読み込む
     this.settings = parseSettings(this.store.load());
@@ -119,7 +121,12 @@ export class GameApp {
   }
 
   start(): void {
-    if (new URLSearchParams(location.search).has('debug')) this.exposeDebugHook();
+    const params = new URLSearchParams(location.search);
+    if (params.has('debug')) {
+      this.exposeDebugHook();
+      // VFX の見た目確認用: `?debug=1&vfxSlow=8` で VFX の時間だけを 1/8 に遅くする(ゲームは通常速度)
+      this.vfxSlow = Math.max(1, Number(params.get('vfxSlow')) || 1);
+    }
     this.watcher = new OrientationWatcher((c) => this.onViewportChange(c));
     document.addEventListener('visibilitychange', () => this.onVisibilityChange());
     if (!this.supportsWebGl2()) {
@@ -151,6 +158,17 @@ export class GameApp {
         this.renderer?.vfx.group.children.map(
           (o) => `${o.name || o.type}:${o.visible ? 'v' : 'h'}`,
         ) ?? [],
+      project: (name: string) => this.renderer?.projectObject(name) ?? null,
+      vfxBudget: () => this.renderer?.vfx.budgetInfo() ?? null,
+      /** 発射体・設置物・召喚体の表示(武器別の言語の確認用) */
+      styleVisuals: () =>
+        this.renderer?.styleVisuals.group.children.map((o) => ({
+          name: o.name,
+          visible: o.visible,
+          position: o.position.toArray(),
+          rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
+          children: o.children.map((c) => `${c.name || c.type}:${c.visible ? 'v' : 'h'}`),
+        })) ?? [],
       attackButton: () => ({
         held: this.buttons.get('attack').isHeld(),
         holdStarted: this.buttons.get('attack').hasHoldStarted(),
@@ -357,7 +375,7 @@ export class GameApp {
         this.currView = session.view();
       }
       if (advance.steps === 0 && this.currView === null) this.currView = session.view();
-      this.renderer.vfx.update(advance.steps * FIXED_STEP_SECONDS);
+      this.renderer.vfx.update((advance.steps * FIXED_STEP_SECONDS) / this.vfxSlow);
       if (session.phase === 'ended') this.dispatch({ type: 'sessionEnded' });
       if (pausePressed) this.dispatch({ type: 'pausePressed' });
       this.render(advance.alpha);

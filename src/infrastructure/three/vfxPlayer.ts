@@ -5,10 +5,10 @@ import type { ViewState } from '../../application/viewState';
 import type { GameConfig } from '../../domain/config/gameConfig';
 import type { AttackKind } from '../../domain/hitReaction/hitTables';
 import type { Vec3 } from '../../domain/math/vec3';
-import type { StyleCategory } from '../../domain/attackStyle/actionSpec';
 import { findAttackStyle } from '../../domain/attackStyle/attackStyleCatalog';
 import type { HitVolume } from '../../domain/combat/hitVolume';
 import { qualityPreset, type Quality, type QualityPreset } from '../../domain/settings/settings';
+import { meleeVisualOf, shotVisualOf } from './weaponVisual';
 
 // VFX プレイヤー(デザインディレクション エフェクト)。ローポリ・フラットシェード、ポリゴンの形だけで作る。
 // プールから取得し、色ごとに 1 マテリアル、粒は InstancedMesh でまとめる。寿命はワールド時間で進む(F10)。
@@ -172,6 +172,63 @@ function sparkGeometry(): THREE.BufferGeometry {
   return g;
 }
 
+/** 矢(武器別の言語): ローカル +Y へ向く。軸(幅 0.05 m)+ 三角の鏃 + 2 枚の矢羽。全長 1.0 m、中心が原点。 */
+function arrowGeometry(): THREE.BufferGeometry {
+  const L = 1.0;
+  const w = 0.025;
+  const positions: number[] = [];
+  const quad = (x0: number, y0: number, x1: number, y1: number) => {
+    positions.push(x0, y0, 0, x1, y0, 0, x1, y1, 0, x0, y0, 0, x1, y1, 0, x0, y1, 0);
+  };
+  const tri = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number) => {
+    positions.push(ax, ay, 0, bx, by, 0, cx, cy, 0);
+  };
+  quad(-w, -L / 2, w, L / 2 - 0.12);
+  tri(-0.07, L / 2 - 0.16, 0.07, L / 2 - 0.16, 0, L / 2);
+  tri(-w, -L / 2 + 0.22, -w, -L / 2, -0.1, -L / 2 - 0.03);
+  tri(w, -L / 2, w, -L / 2 + 0.22, 0.1, -L / 2 - 0.03);
+  return crossedPlanes(positions);
+}
+
+/** XY 平面の三角形列を、Y 軸回りに 90 度回した複製と合わせた十字板にする(背後のカメラから薄板が消えないように)。 */
+function crossedPlanes(positions: number[]): THREE.BufferGeometry {
+  const doubled = positions.slice();
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i] ?? 0;
+    const y = positions[i + 1] ?? 0;
+    doubled.push(0, y, x);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(doubled, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+/** 槍の突き(武器別の言語): ローカル +Y へ伸びる柄(幅 0.06 m)+ 三角の穂先(幅 0.12 m、長さ 0.25 m)。原点が手元。 */
+function spearGeometry(length: number): THREE.BufferGeometry {
+  const w = 0.04;
+  const tip = Math.min(0.25, length * 0.3);
+  const shaft = length - tip;
+  const positions: number[] = [];
+  const tri = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number) => {
+    positions.push(ax, ay, 0, bx, by, 0, cx, cy, 0);
+  };
+  tri(-w, 0, w, 0, w, shaft);
+  tri(-w, 0, w, shaft, -w, shaft);
+  tri(-0.08, shaft, 0.08, shaft, 0, length);
+  return crossedPlanes(positions);
+}
+
+/** 筋・細線・突きの線に使う細い棒(どの角度からも見える)。 */
+function rodGeometry(): THREE.BufferGeometry {
+  return new THREE.BoxGeometry(1, 1, 1);
+}
+
+const UP_AXIS = new THREE.Vector3(0, 1, 0);
+/** 槍・拳の突きを前方からわずかに上へ向ける角度。背後のカメラで長さが読めるようにする */
+const SPEAR_PITCH = (14 * Math.PI) / 180;
+const JAB_PITCH = (12 * Math.PI) / 180;
+
 /**
  * 斬撃の板の向き。ローカル X → 前方(yaw)、ローカル Y → 前方から見て右、ローカル Z → 上 の基底に、
  * 前方軸回りの roll(1 段 +45 度、2 段 −45 度、3 段 0、空中・強攻撃 90 度)を掛け、最後に yaw で世界へ向ける。
@@ -288,6 +345,18 @@ export class VfxPlayer implements EffectPort {
   /** 背景の明度を落とす量(0〜0.4)。バースト発動時 0.3 秒。 */
   sceneDim(): number {
     return this.dim;
+  }
+
+  /** デバッグ用: 予算の内訳。 */
+  budgetInfo(): Record<string, number> {
+    return {
+      limit: this.preset.vfxMeshLimit,
+      effects: this.effects.length,
+      sparks: this.sparks.active,
+      shards: this.shards.active,
+      dust: this.dust.active,
+      wind: this.windLines.active,
+    };
   }
 
   activeMeshCount(): number {
@@ -430,10 +499,10 @@ export class VfxPlayer implements EffectPort {
         this.spark(event.attack, event.position);
         break;
       case 'tracer':
-        this.tracer(event.from, event.to, event.charged, event.chargeRatio);
+        this.tracer(event.from, event.to, event.charged, event.chargeRatio, event.styleId);
         break;
       case 'muzzleFlash':
-        this.muzzleFlash(event.position, event.yaw);
+        this.muzzleFlash(event.position, event.yaw, event.styleId);
         break;
       case 'lunge':
         this.afterimageQueue.push({
@@ -506,7 +575,7 @@ export class VfxPlayer implements EffectPort {
     }
   }
 
-  /** スタイル行動の発生時の表現(デザインディレクション 系統別の言語)。 */
+  /** スタイル行動の発生時の表現(デザインディレクション「武器別の言語」)。 */
   private attackSwing(
     kind: AttackKind,
     position: Vec3,
@@ -514,35 +583,176 @@ export class VfxPlayer implements EffectPort {
     action: string | null,
     styleId: string | null,
   ): void {
-    const category: StyleCategory | null = styleId
-      ? (findAttackStyle(styleId)?.category ?? null)
-      : null;
-    if (action === 'lunge' && category !== 'sword' && category !== 'polearm') {
+    const category = styleId ? findAttackStyle(styleId)?.category : undefined;
+    // 銃火器・弓投擲の発射は銃口・矢・発射体が語るので、剣術の帯は出さない
+    if (category === 'firearm' || category === 'ranged') return;
+    const visual = meleeVisualOf(styleId);
+    const heavy = kind === 'heavy' || kind === 'huge' || kind === 'strongAttack';
+    if (action === 'lunge' && visual !== 'slash' && visual !== 'spear' && visual !== 'sweep') {
       this.dustPuff(position, 4, 0.2);
       return;
     }
-    switch (category) {
-      case 'strike':
-      case 'special':
+    switch (visual) {
+      case 'fist':
+        this.jab(position, yaw, heavy);
+        return;
+      case 'hammer':
+        this.smash(position, yaw, kind);
+        return;
+      case 'staff':
+        this.sweepBand(position, yaw, 1.0, 1.8, 150, 'grey', 8 / 60);
+        return;
+      case 'spear':
+        this.spearThrust(position, yaw, heavy ? 2.6 : 2.0);
+        return;
+      case 'sweep':
+        this.sweepBand(position, yaw, 1.2, heavy ? 2.5 : 2.0, 180, 'cyan', 10 / 60);
+        return;
+      case 'impact':
         // 打撃: 足元の衝撃波リング。重い区分ほど大きい
         this.ring(position, 'white', kind === 'huge' ? 2.2 : kind === 'heavy' ? 1.6 : 1.0);
         this.dustPuff(position, 3, 0.15);
         return;
-      case 'polearm':
-        this.thrust(position, yaw, kind === 'heavy' || kind === 'huge' ? 2.6 : 2.0);
-        return;
       case 'magic':
         this.ring(position, 'yellow', 1.2);
         return;
-      case 'defense':
-      case 'movement':
-      case 'placement':
-      case 'ranged':
-      case 'firearm':
+      case 'slash':
         this.slash(kind, position, yaw);
         return;
-      default:
-        this.slash(kind, position, yaw);
+    }
+  }
+
+  /**
+   * 拳: 右肩(右 0.35 m・高さ 1.05 m)から正面へ長さ 0.7 m・太さ 0.12 m の白い突きの棒。先端に火花 3 粒。
+   * 背後のカメラから体に隠れないよう右へ寄せる。重い区分は足元に白リング。
+   */
+  private jab(position: Vec3, yaw: number, heavy: boolean): void {
+    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    const dir = forward.clone().setY(Math.tan(JAB_PITCH)).normalize();
+    const len = 0.7;
+    const mesh = this.play(
+      'vfx_jab_line',
+      () => new THREE.Mesh(rodGeometry(), this.material('white')),
+      8 / 60,
+      (t, m) => {
+        const grow = 0.3 + 0.7 * easeOut(clamp01(t / 0.4));
+        m.scale.set(0.12, len * grow, 0.12);
+        (m.material as THREE.MeshBasicMaterial).opacity = t < 0.5 ? 1 : 1 - (t - 0.5) / 0.5;
+      },
+    );
+    mesh.position
+      .set(position.x, position.y + 1.05, position.z)
+      .addScaledVector(right, 0.35)
+      .addScaledVector(dir, 0.65);
+    mesh.quaternion.setFromUnitVectors(UP_AXIS, dir);
+    mesh.material = this.material('white').clone();
+    const tip = new THREE.Vector3(position.x, position.y + 1.05, position.z)
+      .addScaledVector(right, 0.35)
+      .addScaledVector(dir, 1.0);
+    this.sparkAt(tip, 3);
+    if (heavy) this.ring(position, 'white', 1.2);
+  }
+
+  /**
+   * 槌: 右 0.4 m・高さ 1.5 m を支点に幅 0.35 m・高さ 1.6 m の白灰の板が -60 度 → +20 度に振り下ろされ、
+   * 着地(正面 1 m)で地面リング + 破片 + ダスト。支点を右上に置き、背後のカメラから振りが見えるようにする。
+   */
+  private smash(position: Vec3, yaw: number, kind: AttackKind): void {
+    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    const mesh = this.play(
+      'vfx_smash_slab',
+      () => new THREE.Mesh(new THREE.PlaneGeometry(0.35, 1.6), this.material('grey')),
+      10 / 60,
+      (t, m) => {
+        const swing = easeIn(clamp01(t / 0.6));
+        m.rotation.order = 'YXZ';
+        m.rotation.set((-60 + 80 * swing) * (Math.PI / 180), yaw, 0);
+        (m.material as THREE.MeshBasicMaterial).opacity = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+      },
+    );
+    mesh.position
+      .set(position.x, position.y + 1.5, position.z)
+      .addScaledVector(right, 0.4)
+      .addScaledVector(forward, 0.5);
+    mesh.material = this.material('grey').clone();
+    const impact = { x: position.x + forward.x, y: position.y, z: position.z + forward.z };
+    this.ring(impact, 'white', kind === 'huge' ? 2.2 : kind === 'heavy' ? 2.0 : 1.6);
+    this.shardBurst(impact, 4, 'grey');
+    this.dustPuff(impact, 4, 0.25);
+  }
+
+  /** 棍・薙ぎ: 水平の薄い帯(内径 / 外径 / 中心角)。剣術の帯より薄く広い。 */
+  private sweepBand(
+    position: Vec3,
+    yaw: number,
+    inner: number,
+    outer: number,
+    angleDeg: number,
+    color: ColorName,
+    life: number,
+  ): void {
+    const mesh = this.play(
+      `vfx_sweep_${color}_${outer}_${angleDeg}`,
+      () =>
+        new THREE.Mesh(fanGeometry(inner, outer, angleDeg, 12, 0.05, -0.05), this.material(color)),
+      life,
+      (t, m) => {
+        m.scale.setScalar(easeOut(clamp01(t / 0.3)));
+        (m.material as THREE.MeshBasicMaterial).opacity = t < 0.4 ? 1 : 1 - (t - 0.4) / 0.6;
+      },
+    );
+    mesh.position.set(position.x, position.y + 0.85, position.z);
+    mesh.quaternion.copy(slashOrientation(yaw, 0));
+    mesh.material = this.material(color).clone();
+  }
+
+  /**
+   * 槍: 右手(右 0.35 m・高さ 1.05 m)から、幅 0.06 m・長さ = リーチの柄 + 三角の穂先が 0.6 m 前へ押し出される。
+   * 背後のカメラから体に隠れないよう右へ寄せる。
+   */
+  private spearThrust(position: Vec3, yaw: number, length: number): void {
+    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    const hand = new THREE.Vector3(position.x, position.y + 1.05, position.z).addScaledVector(
+      right,
+      0.35,
+    );
+    const dir = forward.clone().setY(Math.tan(SPEAR_PITCH)).normalize();
+    const mesh = this.play(
+      `vfx_spear_thrust_${length}`,
+      () => new THREE.Mesh(spearGeometry(length), this.material('cyan')),
+      9 / 60,
+      (t, m) => {
+        const push = 0.6 * easeOut(clamp01(t / 0.6));
+        m.position.copy(hand).addScaledVector(dir, push - 0.3);
+        (m.material as THREE.MeshBasicMaterial).opacity = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+      },
+    );
+    mesh.position.copy(hand).addScaledVector(dir, -0.3);
+    mesh.quaternion.setFromUnitVectors(UP_AXIS, dir);
+    mesh.material = this.material('cyan').clone();
+  }
+
+  private sparkAt(position: THREE.Vector3, count: number): void {
+    const n = this.particleCount(count);
+    for (let i = 0; i < n; i++) {
+      const dir = new THREE.Vector3(
+        Math.random() - 0.5,
+        Math.random() - 0.5,
+        Math.random() - 0.5,
+      ).normalize();
+      this.sparks.spawn({
+        age: 0,
+        life: 0.2,
+        position: position.clone(),
+        velocity: dir.clone().multiplyScalar(0.6),
+        scale: 0.8,
+        gravity: false,
+        groundY: -Infinity,
+        rotation: new THREE.Euler(0, Math.atan2(dir.x, dir.z), Math.asin(dir.y)),
+      });
     }
   }
 
@@ -711,68 +921,227 @@ export class VfxPlayer implements EffectPort {
     if (kind === 'huge') this.ring(position, 'cyan', 2.0);
   }
 
-  /** 弾道線: 射線に沿った細長い板。射撃は白で 3 ステップ、タメ打ちは幅 0.12 m の淡シアン + 加算の白い芯で 12 ステップ。 */
-  private tracer(from: Vec3, to: Vec3, charged: boolean, chargeRatio: number): void {
+  /**
+   * 射線の表現(武器別の言語)。弾・散弾・連射・ダーツは「射線上を飛ぶ筋」、狙撃と針は「残る細線」、
+   * ビームは「幅のある帯 + 加算の芯」、矢は「飛んで刺さる矢」。設置物・召喚体の射線は弾。
+   */
+  private tracer(
+    from: Vec3,
+    to: Vec3,
+    charged: boolean,
+    chargeRatio: number,
+    styleId?: string,
+  ): void {
     const a = new THREE.Vector3(from.x, from.y, from.z);
     const b = new THREE.Vector3(to.x, to.y, to.z);
-    const length = a.distanceTo(b);
-    if (length < 0.05) return;
-    const mid = a.clone().add(b).multiplyScalar(0.5);
-    const dir = b.clone().sub(a).normalize();
-    const place = (m: THREE.Mesh, width: number) => {
-      m.position.copy(mid);
-      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-      m.scale.set(width, length, 1);
-    };
-    const life = charged ? 12 / 60 : 3 / 60;
-    const body = this.play(
-      charged ? 'vfx_charged_shot_tracer' : 'vfx_shoot_tracer',
-      () =>
-        new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.material(charged ? 'cyan' : 'white')),
-      life,
-      (t, m) => {
-        (m.material as THREE.MeshBasicMaterial).opacity = 1 - t;
-      },
-    );
-    place(body, charged ? 0.12 : 0.03);
-    body.material = this.material(charged ? 'cyan' : 'white').clone();
-    if (!charged) return;
-    const core = this.play(
-      'vfx_charged_shot_core',
-      () => new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.material('white', true)),
-      life,
-      (t, m) => {
-        (m.material as THREE.MeshBasicMaterial).opacity = 1 - t;
-      },
-    );
-    place(core, 0.04 + 0.02 * chargeRatio);
-    core.material = this.material('white', true).clone();
+    if (a.distanceTo(b) < 0.05) return;
+    const ground = { x: to.x, y: to.y - 0.8, z: to.z };
+    const visual = shotVisualOf(styleId);
+    // 背後のカメラでは射線方向に飛ぶ物体が点にしか見えないため、飛ぶ型には射線全体の薄い残線を 2 ステップ敷く
+    if (
+      visual === 'bullet' ||
+      visual === 'rapid' ||
+      visual === 'pellet' ||
+      visual === 'arrow' ||
+      visual === 'dart'
+    ) {
+      this.line(a, b, visual === 'dart' ? 'magenta' : 'white', 0.02, 2 / 60, 'trace');
+    }
+    switch (visual) {
+      case 'beam':
+        this.line(a, b, 'cyan', 0.2, 4 / 60, 'beam');
+        this.line(a, b, 'white', 0.06, 4 / 60, 'beam_core', true);
+        this.ring(ground, 'uiCyan', 0.3);
+        return;
+      case 'arrow':
+        this.arrow(a, b, charged, chargeRatio);
+        return;
+      case 'needle':
+        this.line(a, b, 'white', 0.02, 2 / 60, 'needle');
+        this.sparkAt(b, 2);
+        return;
+      case 'dart':
+        this.streak(a, b, 'magenta', 0.06, 0.25, 30, 'dart');
+        this.ring(ground, 'magenta', 0.3);
+        return;
+      case 'pellet':
+        this.streak(a, b, 'white', 0.08, 0.4, 60, 'pellet');
+        return;
+      case 'rapid':
+        this.streak(a, b, 'white', 0.06, 0.3, 60, 'rapid');
+        return;
+      case 'precise':
+        if (charged) {
+          this.chargedLine(a, b, chargeRatio);
+          return;
+        }
+        this.line(a, b, 'white', 0.03, 8 / 60, 'precise');
+        this.streak(a, b, 'white', 0.05, 0.6, 50, 'precise');
+        return;
+      case 'stamina':
+        this.line(a, b, 'yellow', 0.03, 4 / 60, 'stamina');
+        this.streak(a, b, 'yellow', 0.05, 0.6, 50, 'stamina');
+        return;
+      case 'bullet':
+        if (charged) {
+          this.chargedLine(a, b, chargeRatio);
+          return;
+        }
+        this.streak(a, b, 'white', 0.05, 0.6, 50, 'bullet');
+        return;
+    }
   }
 
-  /** マズルフラッシュ: 銃口(プレイヤー中心の高さ・正面 0.5 m)から放射する 4 本の三角形。0.1 秒。 */
-  private muzzleFlash(position: Vec3, yaw: number): void {
+  /** 射線全体に残る細線。 */
+  private line(
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    color: ColorName,
+    width: number,
+    life: number,
+    key: string,
+    additive = false,
+  ): void {
+    const length = a.distanceTo(b);
+    const dir = b.clone().sub(a).normalize();
+    const mesh = this.play(
+      `vfx_shot_line_${key}`,
+      () => new THREE.Mesh(rodGeometry(), this.material(color, additive)),
+      life,
+      (t, m) => {
+        (m.material as THREE.MeshBasicMaterial).opacity = 1 - t;
+      },
+    );
+    mesh.position.copy(a).add(b).multiplyScalar(0.5);
+    mesh.quaternion.setFromUnitVectors(UP_AXIS, dir);
+    mesh.scale.set(width, length, width);
+    mesh.material = this.material(color, additive).clone();
+  }
+
+  /** 射線上を飛ぶ短い筋。長さ len m の板が speed m/s で from → to へ進み、着弾で消える。 */
+  private streak(
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    color: ColorName,
+    width: number,
+    len: number,
+    speed: number,
+    key: string,
+  ): void {
+    const total = a.distanceTo(b);
+    const dir = b.clone().sub(a).normalize();
+    const life = Math.max(3 / 60, total / speed);
+    const mesh = this.play(
+      `vfx_shoot_tracer_${key}`,
+      () => new THREE.Mesh(rodGeometry(), this.material(color)),
+      life,
+      (t, m) => {
+        const head = Math.min(total, speed * t * life);
+        const visible = Math.min(head, len);
+        m.position.copy(a).addScaledVector(dir, head - visible / 2);
+        m.scale.set(width, Math.max(0.01, visible), width);
+        (m.material as THREE.MeshBasicMaterial).opacity = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+      },
+    );
+    mesh.position.copy(a);
+    mesh.quaternion.setFromUnitVectors(UP_AXIS, dir);
+    mesh.material = this.material(color).clone();
+  }
+
+  /** タメ打ち: 幅 0.12 m の淡シアン + 加算の白い芯を 12 ステップ。 */
+  private chargedLine(a: THREE.Vector3, b: THREE.Vector3, chargeRatio: number): void {
+    this.line(a, b, 'cyan', 0.12, 12 / 60, 'charged');
+    this.line(a, b, 'white', 0.04 + 0.02 * chargeRatio, 12 / 60, 'charged_core', true);
+  }
+
+  /** 矢: 30 m/s で飛び、着弾点に 0.3 秒刺さって消える。タメの狙い撃ちは 1.4 倍・淡シアンの軌跡。 */
+  private arrow(a: THREE.Vector3, b: THREE.Vector3, charged: boolean, chargeRatio: number): void {
+    const total = a.distanceTo(b);
+    const dir = b.clone().sub(a).normalize();
+    const speed = 30;
+    const flight = total / speed;
+    const life = flight + 0.3;
+    const color: ColorName = charged ? 'cyan' : 'white';
+    const mesh = this.play(
+      charged ? 'vfx_arrow_charged' : 'vfx_arrow',
+      () => new THREE.Mesh(arrowGeometry(), this.material(color)),
+      life,
+      (t, m) => {
+        const head = Math.min(total, speed * t * life);
+        m.position.copy(a).addScaledVector(dir, head - 0.5);
+        m.scale.setScalar(charged ? 1.4 : 1);
+        const stuck = clamp01((t * life - flight) / 0.25);
+        (m.material as THREE.MeshBasicMaterial).opacity = 1 - easeIn(stuck);
+      },
+    );
+    mesh.position.copy(a);
+    mesh.quaternion.setFromUnitVectors(UP_AXIS, dir);
+    mesh.material = this.material(color).clone();
+    if (charged) this.line(a, b, 'cyan', 0.03 + 0.03 * chargeRatio, 6 / 60, 'arrow_trail');
+  }
+
+  /**
+   * 銃口の表現(武器別の言語)。弾・狙撃・スタミナ弾は 4 本の三角形、散弾は 6 本を広角に、連射は 3 本 + 薬莢、
+   * ビームは銃口のリング、矢・針・ダーツは出さない。狙撃は白灰の煙を足す。
+   */
+  private muzzleFlash(position: Vec3, yaw: number, styleId?: string): void {
+    const visual = shotVisualOf(styleId);
+    if (visual === 'arrow' || visual === 'needle' || visual === 'dart') return;
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     const muzzle = new THREE.Vector3(position.x, position.y, position.z).addScaledVector(
       forward,
       0.5,
     );
-    for (let i = 0; i < 4; i++) {
-      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-      const spread = new THREE.Vector3(Math.cos(a), Math.sin(a), 0).applyAxisAngle(
-        new THREE.Vector3(0, 1, 0),
+    if (visual === 'beam') {
+      const ring = this.play(
+        'vfx_muzzle_ring',
+        () => new THREE.Mesh(new THREE.RingGeometry(0.6, 1.0, 16), this.material('uiCyan')),
+        3 / 60,
+        (t, m) => {
+          m.scale.setScalar(0.3 * (1 + 0.5 * t));
+          (m.material as THREE.MeshBasicMaterial).opacity = 1 - t;
+        },
+      );
+      ring.position.copy(muzzle);
+      ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), forward);
+      ring.material = this.material('uiCyan').clone();
+      return;
+    }
+    const count = visual === 'pellet' ? 6 : visual === 'rapid' ? 3 : 4;
+    const spreadSpeed = visual === 'pellet' ? 1.4 : visual === 'rapid' ? 0.6 : 0.8;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + Math.PI / 4;
+      const spread = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).applyAxisAngle(
+        UP_AXIS,
         yaw,
       );
       this.sparks.spawn({
         age: 0,
         life: 0.1,
         position: muzzle.clone(),
-        velocity: spread.clone().multiplyScalar(0.8),
-        scale: 0.5,
+        velocity: spread.clone().multiplyScalar(spreadSpeed),
+        scale: visual === 'rapid' ? 0.35 : 0.5,
         gravity: false,
         groundY: -Infinity,
         rotation: new THREE.Euler(0, Math.atan2(spread.x, spread.z), Math.asin(spread.y)),
       });
     }
+    if (visual === 'rapid') {
+      // 薬莢: 右へ弾いて重力で落ちる白灰の粒
+      const right = new THREE.Vector3(-forward.z, 0, forward.x);
+      this.dust.spawn({
+        age: 0,
+        life: 0.6,
+        position: muzzle.clone().addScaledVector(forward, -0.4),
+        velocity: right.multiplyScalar(1.5).add(new THREE.Vector3(0, 1.8, 0)),
+        scale: 0.3,
+        gravity: true,
+        groundY: position.y - 0.85,
+        rotation: new THREE.Euler(Math.random() * 3, Math.random() * 3, 0),
+      });
+    }
+    if (visual === 'precise')
+      this.dustPuff({ x: muzzle.x, y: muzzle.y - 0.1, z: muzzle.z }, 2, 0.1);
   }
 
   private ring(

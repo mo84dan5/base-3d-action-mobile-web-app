@@ -561,7 +561,8 @@ export class GameSession implements CombatHost {
         chargeRatio: shot.chargeRatio,
       },
     );
-    this.effect({ kind: 'muzzleFlash', position: shot.origin, yaw: this.player.yaw });
+    const styleId = this.currentStyle.id;
+    this.effect({ kind: 'muzzleFlash', position: shot.origin, yaw: this.player.yaw, styleId });
     for (const r of results) {
       this.effect({
         kind: 'tracer',
@@ -569,6 +570,7 @@ export class GameSession implements CombatHost {
         to: r.end,
         charged: shot.charged || shot.beamWidth > 0,
         chargeRatio: shot.beamWidth > 0 ? Math.max(shot.chargeRatio, 0.5) : shot.chargeRatio,
+        styleId,
       });
     }
   }

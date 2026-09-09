@@ -53,3 +53,130 @@ describe('VfxPlayer の斬撃', () => {
     expect(normalOf(mesh.quaternion).y).toBeCloseTo(1, 5);
   });
 });
+
+describe('VfxPlayer の武器別の言語(射線)', () => {
+  const make = () => new VfxPlayer(defaultConfig, 'medium', new THREE.CapsuleGeometry(0.4, 0.9));
+  const from = { x: 0, y: 0.85, z: 0 };
+  const to = { x: 0, y: 0.85, z: 8 };
+  const shoot = (vfx: VfxPlayer, styleId: string, charged = false) => {
+    vfx.trigger({ kind: 'muzzleFlash', position: from, yaw: 0, styleId });
+    vfx.trigger({ kind: 'tracer', from, to, charged, chargeRatio: charged ? 1 : 0, styleId });
+  };
+  const names = (vfx: VfxPlayer) => {
+    const out: string[] = [];
+    vfx.group.traverse((o) => {
+      if (o.visible && o.name) out.push(o.name);
+    });
+    return out;
+  };
+
+  it('弓は矢の形が射線上を飛び、弾道線を出さない', () => {
+    const vfx = make();
+    shoot(vfx, 'bow');
+    const n = names(vfx);
+    expect(n).toContain('vfx_arrow');
+    expect(n.some((x) => x.startsWith('vfx_shoot_tracer'))).toBe(false);
+    const arrow = vfx.group.getObjectByName('vfx_arrow') as THREE.Mesh;
+    vfx.update(1 / 60);
+    const first = arrow.position.z;
+    vfx.update(1 / 60);
+    expect(arrow.position.z).toBeGreaterThan(first);
+  });
+
+  it('ビームは幅 0.2 m の帯と加算の芯で、弾の筋は出さない', () => {
+    const vfx = make();
+    shoot(vfx, 'laser', true);
+    const n = names(vfx);
+    expect(n).toContain('vfx_shot_line_beam');
+    expect(n).toContain('vfx_shot_line_beam_core');
+    expect(n).toContain('vfx_muzzle_ring');
+    expect(n.some((x) => x.startsWith('vfx_shoot_tracer'))).toBe(false);
+    const beam = vfx.group.getObjectByName('vfx_shot_line_beam') as THREE.Mesh;
+    expect(beam.scale.x).toBeCloseTo(0.2, 5);
+  });
+
+  it('ライフルは残る細線と飛ぶ筋、ガトリングは短い筋、ショットガンは太い短い筋でメッシュ名が異なる', () => {
+    const rifle = make();
+    shoot(rifle, 'rifle');
+    expect(names(rifle)).toContain('vfx_shot_line_precise');
+    expect(names(rifle)).toContain('vfx_shoot_tracer_precise');
+    const gatling = make();
+    shoot(gatling, 'gatling');
+    expect(names(gatling)).toContain('vfx_shoot_tracer_rapid');
+    const shotgun = make();
+    shoot(shotgun, 'shotgun');
+    expect(names(shotgun)).toContain('vfx_shoot_tracer_pellet');
+    const pellet = shotgun.group.getObjectByName('vfx_shoot_tracer_pellet') as THREE.Mesh;
+    shotgun.update(1 / 60);
+    expect(pellet.scale.x).toBeCloseTo(0.08, 5);
+  });
+
+  it('設置物・召喚体の射線(styleId なし)は弾の筋になる', () => {
+    const vfx = make();
+    vfx.trigger({ kind: 'tracer', from, to, charged: false, chargeRatio: 0 });
+    expect(names(vfx)).toContain('vfx_shoot_tracer_bullet');
+  });
+});
+
+describe('VfxPlayer の武器別の言語(近接)', () => {
+  const make = () => new VfxPlayer(defaultConfig, 'medium', new THREE.CapsuleGeometry(0.4, 0.9));
+  const swing = (vfx: VfxPlayer, styleId: string, attack: 'light' | 'heavy' = 'light') =>
+    vfx.trigger({
+      kind: 'attackSwing',
+      attack,
+      position: { x: 0, y: 0, z: 0 },
+      yaw: 0,
+      action: 'combo',
+      styleId,
+    });
+
+  it('槍は柄 + 穂先の突きが前へ押し出され、剣術の帯は出ない', () => {
+    const vfx = make();
+    swing(vfx, 'spear');
+    const spear = vfx.group.getObjectByName('vfx_spear_thrust_2') as THREE.Mesh | undefined;
+    expect(spear).toBeDefined();
+    if (!spear) return;
+    const before = spear.position.z;
+    vfx.update(1 / 60);
+    vfx.update(1 / 60);
+    expect(spear.position.z).toBeGreaterThan(before);
+    expect(vfx.group.getObjectByName('vfx_light_slash_1.4')).toBeUndefined();
+  });
+
+  it('銃火器・弓投擲の発射(attackSwing)では剣術の帯を出さない', () => {
+    const vfx = make();
+    swing(vfx, 'laser');
+    swing(vfx, 'bow');
+    const visible: string[] = [];
+    vfx.group.traverse((o) => {
+      if (o.visible && o.name.includes('slash')) visible.push(o.name);
+    });
+    expect(visible).toEqual([]);
+  });
+
+  it('槍の突きは右手側(+x 側ではなく画面右 = -x)から出て、少し上を向く', () => {
+    const vfx = make();
+    swing(vfx, 'spear');
+    const spear = vfx.group.getObjectByName('vfx_spear_thrust_2') as THREE.Mesh;
+    // yaw 0(前方 +z)のとき右手は -x 側
+    expect(spear.position.x).toBeLessThan(-0.2);
+    const tip = new THREE.Vector3(0, 1, 0).applyQuaternion(spear.quaternion);
+    expect(tip.z).toBeGreaterThan(0.9);
+    expect(tip.y).toBeGreaterThan(0.15);
+  });
+
+  it('大槌は板の振り下ろし、拳は突きの線、棍は白灰の薄い帯、薙刀は淡シアンの広い帯', () => {
+    const hammer = make();
+    swing(hammer, 'warhammer', 'heavy');
+    expect(hammer.group.getObjectByName('vfx_smash_slab')).toBeDefined();
+    const fist = make();
+    swing(fist, 'boxer');
+    expect(fist.group.getObjectByName('vfx_jab_line')).toBeDefined();
+    const staff = make();
+    swing(staff, 'staff');
+    expect(staff.group.getObjectByName('vfx_sweep_grey_1.8_150')).toBeDefined();
+    const naginata = make();
+    swing(naginata, 'naginata');
+    expect(naginata.group.getObjectByName('vfx_sweep_cyan_2_180')).toBeDefined();
+  });
+});

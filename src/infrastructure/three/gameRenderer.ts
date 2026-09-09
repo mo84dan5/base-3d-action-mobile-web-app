@@ -243,6 +243,16 @@ export class GameRenderer implements ScreenProjector {
     this.renderer.render(this.scene, this.camera);
   }
 
+  /** デバッグ用: 名前で探したオブジェクトの NDC(x, y: -1〜1、z: 深度)。無ければ null。 */
+  projectObject(name: string): [number, number, number] | null {
+    const o = this.scene.getObjectByName(name);
+    if (!o) return null;
+    const v = new THREE.Vector3();
+    o.updateWorldMatrix(true, false);
+    v.setFromMatrixPosition(o.matrixWorld).project(this.camera);
+    return [v.x, v.y, v.z];
+  }
+
   drawCalls(): number {
     return this.renderer.info.render.calls;
   }
