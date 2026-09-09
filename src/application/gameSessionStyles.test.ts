@@ -91,6 +91,46 @@ describe('エネルギーバー(S02 要素 18)', () => {
   });
 });
 
+describe('1 行動 1 形(エフェクトの重なり解消)', () => {
+  const volumes = (h: Harness) => h.effects.filter((e) => e.kind === 'attackVolume');
+  const shapes = (h: Harness) =>
+    h.effects.flatMap((e) => (e.kind === 'attackSwing' ? [e.shape] : []));
+
+  it('回転斬りの押下: 判定の形(リング)は攻撃 ID ごとに 1 回だけで、振りには shape=ring が付く', () => {
+    const h = new Harness({ ...defaultSettings, attackStyle: 'spin_slash' });
+    h.session.enemies.length = 0;
+    h.step([{ type: 'AttackPressed' }]);
+    h.run(1.0);
+    expect(volumes(h)).toHaveLength(1);
+    expect(shapes(h)).toEqual(['ring']);
+  });
+
+  it('衝撃波の長押し(広がるリング)は最終半径 5 m で 1 回だけ描く', () => {
+    const h = new Harness({ ...defaultSettings, attackStyle: 'shockwave' });
+    h.session.enemies.length = 0;
+    h.session.energy = { ...h.session.energy, value: h.session.energy.max };
+    h.step([{ type: 'AttackHoldStart' }]);
+    h.run(0.5);
+    h.step([{ type: 'AttackHoldEnd' }]);
+    h.run(1.5);
+    const v = volumes(h);
+    expect(v).toHaveLength(1);
+    const first = v[0];
+    expect(
+      first?.kind === 'attackVolume' && first.volume.type === 'ring' ? first.volume.radius : -1,
+    ).toBe(5);
+  });
+
+  it('格闘の押下(球判定)は振りだけで、判定の形は描かない', () => {
+    const h = new Harness({ ...defaultSettings, attackStyle: 'melee' });
+    h.session.enemies.length = 0;
+    h.step([{ type: 'AttackPressed' }]);
+    h.run(0.6);
+    expect(volumes(h)).toHaveLength(0);
+    expect(shapes(h)).toEqual(['sphere']);
+  });
+});
+
 describe('回転攻撃の表示回転(F11)', () => {
   it('回転斬りの長押し中は spinRate が正で、終わると 0 に戻る', () => {
     const h = new Harness({ ...defaultSettings, attackStyle: 'spin_slash' });

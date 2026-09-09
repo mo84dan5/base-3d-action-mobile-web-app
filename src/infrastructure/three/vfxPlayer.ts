@@ -113,6 +113,7 @@ function fanGeometry(
   segments = 10,
   innerLift = 0.3,
   outerDrop = -0.25,
+  taper = true,
 ): THREE.BufferGeometry {
   const positions: number[] = [];
   const half = (angleDeg * Math.PI) / 360;
@@ -122,8 +123,8 @@ function fanGeometry(
   for (let i = 0; i < segments; i++) {
     const a0 = -half + (i / segments) * half * 2;
     const a1 = -half + ((i + 1) / segments) * half * 2;
-    const taper0 = 1 - Math.abs(a0) / half / 2;
-    const taper1 = 1 - Math.abs(a1) / half / 2;
+    const taper0 = taper ? 1 - Math.abs(a0) / half / 2 : 1;
+    const taper1 = taper ? 1 - Math.abs(a1) / half / 2 : 1;
     const o0 = outerR * (0.6 + 0.4 * taper0);
     const o1 = outerR * (0.6 + 0.4 * taper1);
     // 三角形 2 枚(表裏は DoubleSide で描く)
@@ -429,7 +430,14 @@ export class VfxPlayer implements EffectPort {
   trigger(event: EffectEvent): void {
     switch (event.kind) {
       case 'attackSwing':
-        this.attackSwing(event.attack, event.position, event.yaw, event.action, event.styleId);
+        this.attackSwing(
+          event.attack,
+          event.position,
+          event.yaw,
+          event.action,
+          event.styleId,
+          event.shape,
+        );
         break;
       case 'attackVolume':
         this.attackVolume(event.attack, event.volume, event.styleId);
@@ -582,10 +590,13 @@ export class VfxPlayer implements EffectPort {
     yaw: number,
     action: string | null,
     styleId: string | null,
+    shape: 'sphere' | 'fan' | 'ring' | 'line' | null,
   ): void {
     const category = styleId ? findAttackStyle(styleId)?.category : undefined;
     // 銃火器・弓投擲の発射は銃口・矢・発射体が語るので、剣術の帯は出さない
     if (category === 'firearm' || category === 'ranged') return;
+    // 1 行動 1 形: 扇・リング・直線の判定は attackVolume が形を描くので、振りは出さない
+    if (shape === 'fan' || shape === 'ring' || shape === 'line') return;
     const visual = meleeVisualOf(styleId);
     const heavy = kind === 'heavy' || kind === 'huge' || kind === 'strongAttack';
     if (action === 'lunge' && visual !== 'slash' && visual !== 'spear' && visual !== 'sweep') {
@@ -696,7 +707,18 @@ export class VfxPlayer implements EffectPort {
     const mesh = this.play(
       `vfx_sweep_${color}_${outer}_${angleDeg}`,
       () =>
-        new THREE.Mesh(fanGeometry(inner, outer, angleDeg, 12, 0.05, -0.05), this.material(color)),
+        new THREE.Mesh(
+          fanGeometry(
+            inner,
+            outer,
+            angleDeg,
+            angleDeg >= 360 ? 24 : 12,
+            0.05,
+            -0.05,
+            angleDeg < 360,
+          ),
+          this.material(color),
+        ),
       life,
       (t, m) => {
         m.scale.setScalar(easeOut(clamp01(t / 0.3)));
@@ -756,9 +778,51 @@ export class VfxPlayer implements EffectPort {
     }
   }
 
-  /** 扇・リング・直線の判定を、その形のまま地面と正面に描く。 */
+  /**
+   * 扇・リング・直線の判定を描く(1 行動 1 形)。近接系統(剣術・打撃・長柄・移動連動・防御)は武器型で
+   * 胸の高さの帯(扇・リング)や突き(直線)にし、魔法風・特殊・設置は判定の形をそのまま地面と正面に描く。
+   */
   private attackVolume(_kind: AttackKind, volume: HitVolume, styleId: string | null): void {
     const category = styleId ? findAttackStyle(styleId)?.category : undefined;
+    const melee =
+      category === 'sword' ||
+      category === 'strike' ||
+      category === 'polearm' ||
+      category === 'movement' ||
+      category === 'defense';
+    if (melee && volume.type !== 'sphere') {
+      const feet = { x: volume.origin.x, y: volume.origin.y - 0.85, z: volume.origin.z };
+      const bandColor: ColorName =
+        category === 'strike' ? 'grey' : category === 'polearm' ? 'cyan' : 'white';
+      switch (volume.type) {
+        case 'fan':
+          this.sweepBand(
+            feet,
+            volume.yaw,
+            Math.max(0.5, volume.radius * 0.55),
+            volume.radius,
+            volume.angleDeg,
+            bandColor,
+            8 / 60,
+          );
+          return;
+        case 'ring':
+          this.sweepBand(
+            feet,
+            0,
+            Math.max(0.5, volume.radius * 0.55),
+            volume.radius,
+            360,
+            bandColor,
+            8 / 60,
+          );
+          return;
+        case 'line':
+          if (category === 'polearm') this.spearThrust(feet, volume.yaw, volume.length);
+          else this.thrust(feet, volume.yaw, volume.length, volume.width);
+          return;
+      }
+    }
     const color: ColorName =
       category === 'magic' ? 'yellow' : category === 'special' ? 'orange' : 'cyan';
     switch (volume.type) {

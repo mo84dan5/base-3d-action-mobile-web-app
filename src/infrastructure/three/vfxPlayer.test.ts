@@ -43,6 +43,7 @@ describe('VfxPlayer の斬撃', () => {
       yaw: 0,
       action: 'combo',
       styleId: 'melee',
+      shape: 'sphere',
     });
     const mesh = vfx.group.getObjectByName('vfx_normal3_slash_1.6') as THREE.Mesh | undefined;
     expect(mesh).toBeDefined();
@@ -65,7 +66,7 @@ describe('VfxPlayer の武器別の言語(射線)', () => {
   const names = (vfx: VfxPlayer) => {
     const out: string[] = [];
     vfx.group.traverse((o) => {
-      if (o.visible && o.name) out.push(o.name);
+      if (o.visible && o.name.startsWith('vfx_')) out.push(o.name);
     });
     return out;
   };
@@ -120,15 +121,28 @@ describe('VfxPlayer の武器別の言語(射線)', () => {
 
 describe('VfxPlayer の武器別の言語(近接)', () => {
   const make = () => new VfxPlayer(defaultConfig, 'medium', new THREE.CapsuleGeometry(0.4, 0.9));
-  const swing = (vfx: VfxPlayer, styleId: string, attack: 'light' | 'heavy' = 'light') =>
+  const swing = (
+    vfx: VfxPlayer,
+    styleId: string,
+    attack: 'light' | 'heavy' = 'light',
+    shape: 'sphere' | 'fan' | 'ring' | 'line' = 'sphere',
+  ) =>
     vfx.trigger({
       kind: 'attackSwing',
       attack,
       position: { x: 0, y: 0, z: 0 },
       yaw: 0,
-      action: 'combo',
+      action: shape === 'sphere' ? 'combo' : 'area',
       styleId,
+      shape,
     });
+  const visibleNames = (vfx: VfxPlayer) => {
+    const out: string[] = [];
+    vfx.group.traverse((o) => {
+      if (o.visible && o.name.startsWith('vfx_')) out.push(o.name);
+    });
+    return out;
+  };
 
   it('槍は柄 + 穂先の突きが前へ押し出され、剣術の帯は出ない', () => {
     const vfx = make();
@@ -178,5 +192,42 @@ describe('VfxPlayer の武器別の言語(近接)', () => {
     const naginata = make();
     swing(naginata, 'naginata');
     expect(naginata.group.getObjectByName('vfx_sweep_cyan_2_180')).toBeDefined();
+  });
+
+  it('1 行動 1 形: 扇・リング・直線の判定を持つ行動では振りを出さず、attackVolume が武器型で形を描く', () => {
+    const vfx = make();
+    swing(vfx, 'staff', 'light', 'fan');
+    expect(visibleNames(vfx)).toEqual([]);
+    vfx.trigger({
+      kind: 'attackVolume',
+      attack: 'light',
+      volume: { type: 'fan', origin: { x: 0, y: 0.85, z: 0 }, yaw: 0, radius: 1.6, angleDeg: 150 },
+      styleId: 'staff',
+    });
+    expect(visibleNames(vfx)).toEqual(['vfx_sweep_grey_1.6_150']);
+    const ring = make();
+    ring.trigger({
+      kind: 'attackVolume',
+      attack: 'light',
+      volume: { type: 'ring', origin: { x: 0, y: 0.85, z: 0 }, radius: 1.5, width: 1.5 },
+      styleId: 'spin_slash',
+    });
+    expect(visibleNames(ring)).toEqual(['vfx_sweep_white_1.5_360']);
+    const line = make();
+    line.trigger({
+      kind: 'attackVolume',
+      attack: 'heavy',
+      volume: { type: 'line', origin: { x: 0, y: 0.85, z: 0 }, yaw: 0, length: 4, width: 0.8 },
+      styleId: 'skewer',
+    });
+    expect(visibleNames(line)).toEqual(['vfx_spear_thrust_4']);
+    const magic = make();
+    magic.trigger({
+      kind: 'attackVolume',
+      attack: 'medium',
+      volume: { type: 'ring', origin: { x: 0, y: 0.85, z: 0 }, radius: 2, width: 1 },
+      styleId: 'sonic',
+    });
+    expect(visibleNames(magic)).toEqual(['vfx_ring_orange']);
   });
 });

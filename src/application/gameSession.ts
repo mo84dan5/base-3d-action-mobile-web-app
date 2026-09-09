@@ -180,6 +180,8 @@ export class GameSession implements CombatHost {
   damageNumbers: readonly DamageNumber[] = [];
   interactMessage: InteractMessage | null = null;
   worldTime = 0;
+  /** 直近に attackVolume を描いた攻撃 ID(判定の形は攻撃 ID ごとに 1 回だけ描く) */
+  private lastVolumeAttackId = -1;
   /** エネルギー不足の拒否を EN バーに点滅で知らせる期限(worldTime) */
   energyShortUntil = 0;
   private nextDamageNumberId = 1;
@@ -524,6 +526,9 @@ export class GameSession implements CombatHost {
       return;
     }
     if (event.action === 'hitscan' || event.action === 'projectile') return;
+    const spec = p.action?.spec;
+    const shape =
+      spec && (spec.kind === 'area' || spec.kind === 'multihit') ? spec.shape.type : 'sphere';
     this.effect({
       kind: 'attackSwing',
       attack: kind,
@@ -531,6 +536,7 @@ export class GameSession implements CombatHost {
       yaw: p.yaw,
       action: event.action,
       styleId: event.styleId,
+      shape,
     });
   }
 
@@ -586,11 +592,25 @@ export class GameSession implements CombatHost {
     ) {
       this.effect({ kind: 'skillBurst', position: this.player.position });
     }
-    if (attack.hitTargets.length === 0 && event.volume.type !== 'sphere') {
+    if (
+      attack.hitTargets.length === 0 &&
+      event.volume.type !== 'sphere' &&
+      this.lastVolumeAttackId !== event.attackId
+    ) {
+      // 判定の形は攻撃 ID ごとに 1 回だけ描く。広がるリング(衝撃波)は最終半径で描く(VFX のリングは自前で広がる)
+      this.lastVolumeAttackId = event.attackId;
+      const spec = this.player.action?.spec;
+      const volume =
+        event.volume.type === 'ring' &&
+        spec?.kind === 'area' &&
+        spec.expandSeconds &&
+        spec.shape.type === 'ring'
+          ? { ...event.volume, radius: spec.shape.radius }
+          : event.volume;
       this.effect({
         kind: 'attackVolume',
         attack: event.kind,
-        volume: event.volume,
+        volume,
         styleId: this.player.action?.styleId ?? null,
       });
     }

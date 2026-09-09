@@ -19,6 +19,8 @@ export type EffectEvent =
       /** スタイル行動の種別と ID(系統別の表現。スキル・バーストは null) */
       readonly action: ActionKind | null;
       readonly styleId: string | null;
+      /** 判定の形。扇・リング・直線は attackVolume が形を描くので振りは出さない(1 行動 1 形)。スキル・バーストは null */
+      readonly shape: 'sphere' | 'fan' | 'ring' | 'line' | null;
     }
   | {
       readonly kind: 'attackVolume';
