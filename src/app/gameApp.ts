@@ -352,6 +352,12 @@ export class GameApp {
     this.hud.setShowFps(next.showFps);
     if (next.stickMode === 'fixed') this.showFixedStick();
     else this.hud.setStick(null, true);
+    // 装備の変更は一時停止中(S05 の背景)でも付属物に反映する(キャラクター.md)
+    if (this.session && prev.equipment !== next.equipment) {
+      this.session.syncEquipment(next);
+      this.currView = this.session.view();
+      if (!this.flow.running) this.render(1);
+    }
   }
 
   private collectCommands(): InputCommand[] {

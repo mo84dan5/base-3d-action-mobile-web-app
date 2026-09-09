@@ -16,6 +16,9 @@ const base: ActionGateContext = {
   climbPhase: null,
   countdownActive: false,
   activeTechniqueSlot: null,
+  movementSlots: [],
+  staminaEmpty: false,
+  staminaSlots: [],
   burstCooldownReady: true,
   energyFull: true,
   hasInteractTarget: true,
@@ -58,6 +61,26 @@ describe('技ボタン(F03 / F12)', () => {
   it('Dash 中・カウントダウン中は無効', () => {
     expect(techniqueEnabled(inState('dash'), 'leftArm')).toBe(false);
     expect(techniqueEnabled(inState('idle', { countdownActive: true }), 'head')).toBe(false);
+  });
+  it('スタミナ 0 ではスタミナ技のスロットだけ無効(F12)', () => {
+    const ctx = { staminaEmpty: true, staminaSlots: ['rightArm'] as const };
+    expect(techniqueEnabled(inState('idle', ctx), 'rightArm')).toBe(false);
+    expect(techniqueEnabled(inState('idle', ctx), 'leftArm')).toBe(true);
+    expect(techniqueEnabled(inState('idle', { ...ctx, staminaEmpty: false }), 'rightArm')).toBe(
+      true,
+    );
+  });
+  it('移動連動のスタイルを装備したスロットは Dash / Sprint / Glide 中も有効(F03 の例外。F11 N7)', () => {
+    const ctx = { movementSlots: ['leftArm'] as const };
+    expect(techniqueEnabled(inState('dash', ctx), 'leftArm')).toBe(true);
+    expect(techniqueEnabled(inState('glide', ctx), 'leftArm')).toBe(true);
+    expect(techniqueEnabled(inState('dash', ctx), 'rightArm')).toBe(false);
+    expect(techniqueEnabled(inState('dash', { ...ctx, countdownActive: true }), 'leftArm')).toBe(
+      false,
+    );
+    expect(
+      techniqueEnabled(inState('dash', { ...ctx, activeTechniqueSlot: 'head' }), 'leftArm'),
+    ).toBe(false);
   });
 });
 

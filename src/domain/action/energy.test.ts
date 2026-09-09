@@ -23,7 +23,6 @@ describe('エネルギー(F03)', () => {
     expect(isEnergyFull(e)).toBe(true);
   });
   it('スキルヒット 1 体で +15、空中攻撃 +5、バースト 0', () => {
-    expect(energyForHit('skill', config)).toBe(15);
     expect(energyForHit('air', config)).toBe(5);
     expect(energyForHit('burst', config)).toBe(0);
   });

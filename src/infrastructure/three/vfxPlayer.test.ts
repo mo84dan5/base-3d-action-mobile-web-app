@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import type { EquipmentSlot } from '../../domain/equipment/equipment';
 import { defaultConfig } from '../../domain/config/gameConfig';
 import { VfxPlayer, slashOrientation } from './vfxPlayer';
 
@@ -44,6 +45,7 @@ describe('VfxPlayer の斬撃', () => {
       action: 'combo',
       styleId: 'melee',
       shape: 'sphere',
+      slot: 'rightArm',
     });
     const mesh = vfx.group.getObjectByName('vfx_normal3_slash_1.6') as THREE.Mesh | undefined;
     expect(mesh).toBeDefined();
@@ -126,6 +128,7 @@ describe('VfxPlayer の武器別の言語(近接)', () => {
     styleId: string,
     attack: 'light' | 'heavy' = 'light',
     shape: 'sphere' | 'fan' | 'ring' | 'line' = 'sphere',
+    slot: EquipmentSlot = 'rightArm',
   ) =>
     vfx.trigger({
       kind: 'attackSwing',
@@ -135,6 +138,7 @@ describe('VfxPlayer の武器別の言語(近接)', () => {
       action: shape === 'sphere' ? 'combo' : 'area',
       styleId,
       shape,
+      slot,
     });
   const visibleNames = (vfx: VfxPlayer) => {
     const out: string[] = [];
@@ -143,6 +147,23 @@ describe('VfxPlayer の武器別の言語(近接)', () => {
     });
     return out;
   };
+
+  it('技の出所はスロットのパーツ側(F12): 右腕の突きは右手、左腕は左手、頭は頭の高さから出る', () => {
+    const thrustX = (slot: EquipmentSlot) => {
+      const vfx = make();
+      swing(vfx, 'spear', 'light', 'sphere', slot);
+      const mesh = vfx.group.children.find(
+        (o) => o.visible && o.name.startsWith('vfx_spear_thrust'),
+      );
+      if (!mesh) throw new Error('no thrust');
+      return mesh.position;
+    };
+    // 正面 +Z のとき右は −X
+    expect(thrustX('rightArm').x).toBeLessThan(-0.2);
+    expect(thrustX('leftArm').x).toBeGreaterThan(0.2);
+    expect(Math.abs(thrustX('head').x)).toBeLessThan(0.05);
+    expect(thrustX('head').y).toBeGreaterThan(thrustX('rightArm').y + 0.3);
+  });
 
   it('槍は柄 + 穂先の突きが前へ押し出され、剣術の帯は出ない', () => {
     const vfx = make();

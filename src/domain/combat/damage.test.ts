@@ -71,14 +71,7 @@ describe('徘徊型への通常攻撃 1 段(F04 / F10)', () => {
   });
 });
 
-describe('スキル・バースト・空中攻撃のヒット', () => {
-  it('スキル: ノックバック 5.0 m/s、エネルギー +15、シェイク 0.08 m', () => {
-    const r = resolveHit({ ...base, attackKind: 'skill', damage: 30 }, defaultConfig);
-    expect(r?.knockback?.z).toBeCloseTo(5.0);
-    expect(r?.energyGain).toBe(15);
-    expect(r?.shake).toEqual({ amplitude: 0.08, steps: 9 });
-    expect(r?.hitstop).toEqual({ attacker: 4, victim: 4 });
-  });
+describe('バースト・空中攻撃のヒット(固定スキルは F12 で廃止)', () => {
   it('バースト: ノックバックなし、エネルギー加算なし、ヒットストップ 8', () => {
     const r = resolveHit({ ...base, attackKind: 'burst', damage: 80 }, defaultConfig);
     expect(r?.knockback).toBeNull();

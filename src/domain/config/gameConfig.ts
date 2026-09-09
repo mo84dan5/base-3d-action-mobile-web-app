@@ -96,11 +96,9 @@ export interface ActionConfig {
   readonly holdThreshold: number;
   /** 条件付きで出現するボタンの出現直後ロック(秒) */
   readonly appearLockTime: number;
-  readonly skillCooldown: number;
   readonly burstCooldown: number;
   readonly energyMax: number;
   readonly energyPerNormalHit: number;
-  readonly energyPerSkillHit: number;
   readonly energyPerStrongAttackHit: number;
   readonly energyPerShootHit: number;
   readonly energyPerChargedShotHit: number;
@@ -139,7 +137,6 @@ export interface CombatConfig {
   readonly targetCorrectionHalfAngleDeg: number;
   readonly targetCorrectionRange: number;
   readonly airAttack: AttackTiming;
-  readonly skill: AttackTiming & { readonly radius: number; readonly knockbackSpeed: number };
   readonly burst: AttackTiming & { readonly radius: number };
   readonly normalAttackKnockbackSpeed: number;
   /** 接近強攻撃(格闘、長押し。F04) */
@@ -266,7 +263,6 @@ export interface HitReactionConfig {
     readonly normal12: HitstopSteps;
     readonly normal3: HitstopSteps;
     readonly airAttack: HitstopSteps;
-    readonly skill: HitstopSteps;
     readonly burst: HitstopSteps;
     readonly enemyAttack: HitstopSteps;
     readonly strongAttack: HitstopSteps;
@@ -287,7 +283,6 @@ export interface HitReactionConfig {
   readonly shake: {
     readonly normal3: ShakeSpec;
     readonly airAttack: ShakeSpec;
-    readonly skill: ShakeSpec;
     readonly burst: ShakeSpec;
     readonly playerHit: ShakeSpec;
     readonly enemyDefeat: ShakeSpec;
@@ -393,11 +388,9 @@ export const defaultConfig: GameConfig = {
   action: {
     holdThreshold: 0.2,
     appearLockTime: 0.15,
-    skillCooldown: 8.0,
     burstCooldown: 5.0,
     energyMax: 100,
     energyPerNormalHit: 5,
-    energyPerSkillHit: 15,
     energyPerStrongAttackHit: 10,
     energyPerShootHit: 3,
     energyPerChargedShotHit: 10,
@@ -423,7 +416,6 @@ export const defaultConfig: GameConfig = {
     targetCorrectionHalfAngleDeg: 30,
     targetCorrectionRange: 3.0,
     airAttack: { damage: 10, startup: 0.1, active: 0.1, total: 0.4 },
-    skill: { damage: 30, startup: 0.2, active: 0.1, total: 0.7, radius: 2.5, knockbackSpeed: 5.0 },
     burst: { damage: 80, startup: 0.3, active: 0.2, total: 1.2, radius: 4.0 },
     normalAttackKnockbackSpeed: 1.7,
     strongAttack: {
@@ -533,7 +525,6 @@ export const defaultConfig: GameConfig = {
       normal12: { attacker: 3, victim: 3 },
       normal3: { attacker: 5, victim: 5 },
       airAttack: { attacker: 3, victim: 3 },
-      skill: { attacker: 4, victim: 4 },
       burst: { attacker: 8, victim: 8 },
       enemyAttack: { attacker: 3, victim: 4 },
       strongAttack: { attacker: 6, victim: 6 },
@@ -550,7 +541,6 @@ export const defaultConfig: GameConfig = {
     shake: {
       normal3: { amplitude: 0.05, steps: 7 },
       airAttack: { amplitude: 0.03, steps: 5 },
-      skill: { amplitude: 0.08, steps: 9 },
       burst: { amplitude: 0.15, steps: 18 },
       playerHit: { amplitude: 0.1, steps: 12 },
       enemyDefeat: { amplitude: 0.06, steps: 9 },

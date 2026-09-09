@@ -10,10 +10,11 @@ import {
 } from './cooldown';
 
 describe('クールダウン(F03)', () => {
-  it('スキル発動で 8.0 秒のクールダウンが始まり、8 秒後に準備完了になる', () => {
-    let c = startCooldown(defaultConfig.action.skillCooldown);
+  it('バースト発動でクールダウンが始まり、時間が経つと準備完了になる', () => {
+    const total = defaultConfig.action.burstCooldown;
+    let c = startCooldown(total);
     expect(isReady(c)).toBe(false);
-    c = tickCooldown(c, 7.99);
+    c = tickCooldown(c, total - 0.01);
     expect(isReady(c)).toBe(false);
     c = tickCooldown(c, 0.01);
     expect(isReady(c)).toBe(true);

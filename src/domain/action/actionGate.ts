@@ -10,6 +10,12 @@ export interface ActionGateContext {
   readonly countdownActive: boolean;
   /** 実行中の技のスロット。別スロットの技ボタンは無効(F12) */
   readonly activeTechniqueSlot: EquipmentSlot | null;
+  /** 移動連動(F11 N7)のスタイルを装備したスロット。Dash / Sprint / Climb / Glide 中も有効(F03) */
+  readonly movementSlots: readonly EquipmentSlot[];
+  /** スタミナ 0(スタミナ技のボタンは無効。F12) */
+  readonly staminaEmpty: boolean;
+  /** 押下の技がスタミナを使うスロット */
+  readonly staminaSlots: readonly EquipmentSlot[];
   readonly burstCooldownReady: boolean;
   readonly energyFull: boolean;
   readonly hasInteractTarget: boolean;
@@ -46,9 +52,18 @@ export function attackEnabled(ctx: ActionGateContext): boolean {
 
 /** 技ボタン(F12): 攻撃ボタンと同じ条件。別スロットの技の実行中は無効。 */
 export function techniqueEnabled(ctx: ActionGateContext, slot: EquipmentSlot): boolean {
-  if (!attackEnabled(ctx)) return false;
-  return ctx.activeTechniqueSlot === null || ctx.activeTechniqueSlot === slot;
+  if (ctx.activeTechniqueSlot !== null && ctx.activeTechniqueSlot !== slot) return false;
+  if (ctx.staminaEmpty && ctx.staminaSlots.includes(slot)) return false;
+  if (attackEnabled(ctx)) return true;
+  return (
+    !ctx.countdownActive &&
+    ctx.movementSlots.includes(slot) &&
+    MOVEMENT_STATES.includes(ctx.playerState)
+  );
 }
+
+/** 移動連動のスタイルが技を出せる「技以外の状態」(F03 の例外) */
+const MOVEMENT_STATES: readonly PlayerStateName[] = ['dash', 'sprint', 'climb', 'glide', 'slide'];
 
 /** バースト: エネルギー 100%、接地移動中、クールダウン中でない。 */
 export function burstEnabled(ctx: ActionGateContext): boolean {

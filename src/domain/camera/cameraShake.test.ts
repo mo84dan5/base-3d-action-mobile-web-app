@@ -36,7 +36,7 @@ describe('requestShake(F10 カメラシェイク 重複)', () => {
     expect(shake.totalSteps).toBe(30);
   });
   it('位相は rng から決まる', () => {
-    const shake = requestShake(NO_SHAKE, config.shake.skill, rngQuarter, config);
+    const shake = requestShake(NO_SHAKE, config.shake.strongAttack, rngQuarter, config);
     expect(shake.phaseX).toBeCloseTo(Math.PI / 2);
   });
 });

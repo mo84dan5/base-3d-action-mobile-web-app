@@ -746,7 +746,10 @@ export function stepPlayer(
   };
   const prepared = tickTimers(applySprintHold(released.player, input), dt);
   const next = dispatch(prepared, ctx);
-  return { player: next, events };
+  // 技の行動が終わったらスロットを解放する(F12。コンボの段の間もいったん解放し、同スロットの押下で続ける)
+  const slotFreed =
+    next.action === null && next.techniqueSlot !== null ? { ...next, techniqueSlot: null } : next;
+  return { player: slotFreed, events };
 }
 
 /** プレイヤーの攻撃が当たったときの能力変化(コンボ成長のスタック)。application から呼ぶ。 */

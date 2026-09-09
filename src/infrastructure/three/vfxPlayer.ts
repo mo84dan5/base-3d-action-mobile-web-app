@@ -4,6 +4,7 @@ import type { EffectPort } from '../../application/ports';
 import type { ViewState } from '../../application/viewState';
 import type { GameConfig } from '../../domain/config/gameConfig';
 import type { AttackKind } from '../../domain/hitReaction/hitTables';
+import type { EquipmentSlot } from '../../domain/equipment/equipment';
 import type { Vec3 } from '../../domain/math/vec3';
 import { findAttackStyle } from '../../domain/attackStyle/attackStyleCatalog';
 import type { HitVolume } from '../../domain/combat/hitVolume';
@@ -258,6 +259,28 @@ function clamp01(t: number): number {
   return Math.min(1, Math.max(0, t));
 }
 
+/** 技の出所(F12 / エフェクト.md): 右腕は右手(右 0.35 m)、左腕は左手、頭は頭の正面(高さ 1.5 m) */
+interface TechniqueOrigin {
+  /** 右 +1 / 左 −1 / 中央 0 */
+  readonly side: number;
+  readonly height: number;
+}
+const RIGHT_HAND: TechniqueOrigin = { side: 1, height: 1.05 };
+function techniqueOrigin(slot: EquipmentSlot | null): TechniqueOrigin {
+  if (slot === 'leftArm') return { side: -1, height: 1.05 };
+  if (slot === 'head') return { side: 0, height: 1.5 };
+  return RIGHT_HAND;
+}
+/** カプセル中心(判定の始点)からパーツ側へのずらし。forward は射線方向(水平成分だけ使う) */
+const CAPSULE_CENTER_HEIGHT = 0.85;
+function techniqueOffset(origin: TechniqueOrigin, forward: THREE.Vector3): THREE.Vector3 {
+  const f = new THREE.Vector3(forward.x, 0, forward.z);
+  if (f.lengthSq() < 1e-6) f.set(0, 0, 1);
+  f.normalize();
+  const right = new THREE.Vector3(-f.z, 0, f.x);
+  return right.multiplyScalar(0.3 * origin.side).setY(origin.height - CAPSULE_CENTER_HEIGHT);
+}
+
 export class VfxPlayer implements EffectPort {
   readonly group = new THREE.Group();
   private readonly materials = new Map<string, THREE.MeshBasicMaterial>();
@@ -437,6 +460,7 @@ export class VfxPlayer implements EffectPort {
           event.action,
           event.styleId,
           event.shape,
+          event.slot,
         );
         break;
       case 'attackVolume':
@@ -507,10 +531,17 @@ export class VfxPlayer implements EffectPort {
         this.spark(event.attack, event.position);
         break;
       case 'tracer':
-        this.tracer(event.from, event.to, event.charged, event.chargeRatio, event.styleId);
+        this.tracer(
+          event.from,
+          event.to,
+          event.charged,
+          event.chargeRatio,
+          event.styleId,
+          event.slot,
+        );
         break;
       case 'muzzleFlash':
-        this.muzzleFlash(event.position, event.yaw, event.styleId);
+        this.muzzleFlash(event.position, event.yaw, event.styleId, event.slot);
         break;
       case 'lunge':
         this.afterimageQueue.push({
@@ -524,18 +555,6 @@ export class VfxPlayer implements EffectPort {
           delay: 0.05,
         });
         this.dustPuff(event.position, 3, 0.15);
-        break;
-      case 'skillTelegraph':
-        this.shrinkRing(
-          event.position,
-          'yellow',
-          this.config.combat.skill.radius,
-          this.config.combat.skill.startup,
-        );
-        break;
-      case 'skillBurst':
-        this.ring(event.position, 'yellow', this.config.combat.skill.radius);
-        this.shardBurst(event.position, 8, 'yellow');
         break;
       case 'burstActivate':
         this.burst(event.position);
@@ -591,7 +610,9 @@ export class VfxPlayer implements EffectPort {
     action: string | null,
     styleId: string | null,
     shape: 'sphere' | 'fan' | 'ring' | 'line' | null,
+    slot: EquipmentSlot | null,
   ): void {
+    const origin = techniqueOrigin(slot);
     const category = styleId ? findAttackStyle(styleId)?.category : undefined;
     // 銃火器・弓投擲の発射は銃口・矢・発射体が語るので、剣術の帯は出さない
     if (category === 'firearm' || category === 'ranged') return;
@@ -605,16 +626,16 @@ export class VfxPlayer implements EffectPort {
     }
     switch (visual) {
       case 'fist':
-        this.jab(position, yaw, heavy);
+        this.jab(position, yaw, heavy, origin);
         return;
       case 'hammer':
-        this.smash(position, yaw, kind);
+        this.smash(position, yaw, kind, origin);
         return;
       case 'staff':
         this.sweepBand(position, yaw, 1.0, 1.8, 150, 'grey', 8 / 60);
         return;
       case 'spear':
-        this.spearThrust(position, yaw, heavy ? 2.6 : 2.0);
+        this.spearThrust(position, yaw, heavy ? 2.6 : 2.0, origin);
         return;
       case 'sweep':
         this.sweepBand(position, yaw, 1.2, heavy ? 2.5 : 2.0, 180, 'cyan', 10 / 60);
@@ -637,9 +658,9 @@ export class VfxPlayer implements EffectPort {
    * 拳: 右肩(右 0.35 m・高さ 1.05 m)から正面へ長さ 0.7 m・太さ 0.12 m の白い突きの棒。先端に火花 3 粒。
    * 背後のカメラから体に隠れないよう右へ寄せる。重い区分は足元に白リング。
    */
-  private jab(position: Vec3, yaw: number, heavy: boolean): void {
+  private jab(position: Vec3, yaw: number, heavy: boolean, origin: TechniqueOrigin): void {
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    const right = new THREE.Vector3(-forward.z, 0, forward.x).multiplyScalar(origin.side);
     const dir = forward.clone().setY(Math.tan(JAB_PITCH)).normalize();
     const len = 0.7;
     const mesh = this.play(
@@ -669,9 +690,9 @@ export class VfxPlayer implements EffectPort {
    * 槌: 右 0.4 m・高さ 1.5 m を支点に幅 0.35 m・高さ 1.6 m の白灰の板が -60 度 → +20 度に振り下ろされ、
    * 着地(正面 1 m)で地面リング + 破片 + ダスト。支点を右上に置き、背後のカメラから振りが見えるようにする。
    */
-  private smash(position: Vec3, yaw: number, kind: AttackKind): void {
+  private smash(position: Vec3, yaw: number, kind: AttackKind, origin: TechniqueOrigin): void {
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    const right = new THREE.Vector3(-forward.z, 0, forward.x).multiplyScalar(origin.side);
     const mesh = this.play(
       'vfx_smash_slab',
       () => new THREE.Mesh(new THREE.PlaneGeometry(0.35, 1.6), this.material('grey')),
@@ -734,13 +755,19 @@ export class VfxPlayer implements EffectPort {
    * 槍: 右手(右 0.35 m・高さ 1.05 m)から、幅 0.06 m・長さ = リーチの柄 + 三角の穂先が 0.6 m 前へ押し出される。
    * 背後のカメラから体に隠れないよう右へ寄せる。
    */
-  private spearThrust(position: Vec3, yaw: number, length: number): void {
+  private spearThrust(
+    position: Vec3,
+    yaw: number,
+    length: number,
+    origin: TechniqueOrigin = RIGHT_HAND,
+  ): void {
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
-    const hand = new THREE.Vector3(position.x, position.y + 1.05, position.z).addScaledVector(
-      right,
-      0.35,
-    );
+    const hand = new THREE.Vector3(
+      position.x,
+      position.y + origin.height,
+      position.z,
+    ).addScaledVector(right, 0.35 * origin.side);
     const dir = forward.clone().setY(Math.tan(SPEAR_PITCH)).normalize();
     const mesh = this.play(
       `vfx_spear_thrust_${length}`,
@@ -995,9 +1022,16 @@ export class VfxPlayer implements EffectPort {
     charged: boolean,
     chargeRatio: number,
     styleId?: string,
+    slot?: EquipmentSlot,
   ): void {
-    const a = new THREE.Vector3(from.x, from.y, from.z);
     const b = new THREE.Vector3(to.x, to.y, to.z);
+    // 見た目の始点はスロットのパーツ側(F12)。判定の始点 from は変えない
+    const a = new THREE.Vector3(from.x, from.y, from.z).add(
+      techniqueOffset(
+        techniqueOrigin(slot ?? null),
+        b.clone().sub(new THREE.Vector3(from.x, from.y, from.z)),
+      ),
+    );
     if (a.distanceTo(b) < 0.05) return;
     const ground = { x: to.x, y: to.y - 0.8, z: to.z };
     const visual = shotVisualOf(styleId);
@@ -1148,14 +1182,14 @@ export class VfxPlayer implements EffectPort {
    * 銃口の表現(武器別の言語)。弾・狙撃・スタミナ弾は 4 本の三角形、散弾は 6 本を広角に、連射は 3 本 + 薬莢、
    * ビームは銃口のリング、矢・針・ダーツは出さない。狙撃は白灰の煙を足す。
    */
-  private muzzleFlash(position: Vec3, yaw: number, styleId?: string): void {
+  private muzzleFlash(position: Vec3, yaw: number, styleId?: string, slot?: EquipmentSlot): void {
     const visual = shotVisualOf(styleId);
     if (visual === 'arrow' || visual === 'needle' || visual === 'dart') return;
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    const muzzle = new THREE.Vector3(position.x, position.y, position.z).addScaledVector(
-      forward,
-      0.5,
-    );
+    // 銃口の出所(F12): 右腕は右手、左腕は左手、頭は頭の正面。判定の始点(position)は変えない
+    const muzzle = new THREE.Vector3(position.x, position.y, position.z)
+      .addScaledVector(forward, 0.5)
+      .add(techniqueOffset(techniqueOrigin(slot ?? null), forward));
     if (visual === 'beam') {
       const ring = this.play(
         'vfx_muzzle_ring',

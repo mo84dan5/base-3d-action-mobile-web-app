@@ -6,7 +6,6 @@ export type AttackKind =
   | 'normal2'
   | 'normal3'
   | 'airAttack'
-  | 'skill'
   | 'burst'
   | 'strongAttack'
   | 'shoot'
@@ -29,8 +28,6 @@ export function hitstopFor(kind: AttackKind, config: HitReactionConfig): Hitstop
       return config.hitstop.normal3;
     case 'airAttack':
       return config.hitstop.airAttack;
-    case 'skill':
-      return config.hitstop.skill;
     case 'burst':
       return config.hitstop.burst;
     case 'enemyAttack':
@@ -80,8 +77,6 @@ export function shakeForHit(kind: AttackKind, config: HitReactionConfig): ShakeS
       return config.shake.normal3;
     case 'airAttack':
       return config.shake.airAttack;
-    case 'skill':
-      return config.shake.skill;
     case 'burst':
       return null;
     case 'strongAttack':

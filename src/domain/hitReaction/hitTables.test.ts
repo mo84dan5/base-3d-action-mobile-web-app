@@ -11,7 +11,6 @@ describe('ヒットストップの長さ(F10)', () => {
     expect(hitstopFor('normal3', config)).toEqual({ attacker: 5, victim: 5 });
   });
   it('スキル 4、バースト 8、敵の攻撃は攻撃側 3 / 被弾側 4', () => {
-    expect(hitstopFor('skill', config)).toEqual({ attacker: 4, victim: 4 });
     expect(hitstopFor('burst', config)).toEqual({ attacker: 8, victim: 8 });
     expect(hitstopFor('enemyAttack', config)).toEqual({ attacker: 3, victim: 4 });
   });
@@ -24,7 +23,6 @@ describe('カメラシェイクの選択(F10)', () => {
   });
   it('3 段ヒットは 0.05 m・7 ステップ、スキルは 0.08 m・9 ステップ', () => {
     expect(shakeForHit('normal3', config)).toEqual({ amplitude: 0.05, steps: 7 });
-    expect(shakeForHit('skill', config)).toEqual({ amplitude: 0.08, steps: 9 });
   });
   it('バーストは発動時に 0.15 m・18 ステップ(ヒット時ではない)', () => {
     expect(shakeForHit('burst', config)).toBeNull();

@@ -1,3 +1,4 @@
+import type { EquipmentSlot } from '../domain/equipment/equipment';
 import type { Vec3 } from '../domain/math/vec3';
 import type { AttackKind } from '../domain/hitReaction/hitTables';
 import type {
@@ -21,6 +22,8 @@ export type EffectEvent =
       readonly styleId: string | null;
       /** 判定の形。扇・リング・直線は attackVolume が形を描くので振りは出さない(1 行動 1 形)。スキル・バーストは null */
       readonly shape: 'sphere' | 'fan' | 'ring' | 'line' | null;
+      /** 技の出所(F12): そのスロットのパーツ側から出す。バーストは null */
+      readonly slot: EquipmentSlot | null;
     }
   | {
       readonly kind: 'attackVolume';
@@ -108,16 +111,18 @@ export type EffectEvent =
       readonly chargeRatio: number;
       /** 撃ったスタイル(武器別の言語)。設置物・召喚体の射線は省略(弾) */
       readonly styleId?: string;
+      /** 射線の見た目の始点をそのスロットのパーツ側にする(F12)。判定の始点 from は変えない */
+      readonly slot?: EquipmentSlot;
     }
   | {
       readonly kind: 'muzzleFlash';
       readonly position: Vec3;
       readonly yaw: number;
       readonly styleId?: string;
+      /** 銃口の出所(F12) */
+      readonly slot?: EquipmentSlot;
     }
   | { readonly kind: 'lunge'; readonly position: Vec3; readonly yaw: number }
-  | { readonly kind: 'skillTelegraph'; readonly position: Vec3 }
-  | { readonly kind: 'skillBurst'; readonly position: Vec3 }
   | { readonly kind: 'burstActivate'; readonly position: Vec3 }
   | {
       readonly kind: 'hitSpark';

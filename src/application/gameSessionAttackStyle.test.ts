@@ -52,6 +52,61 @@ class Harness {
   }
 }
 
+describe('3 スロットの技(F12)', () => {
+  const HEAD_LASER: Settings = {
+    ...defaultSettings,
+    equipment: { ...DEFAULT_EQUIPMENT, head: 'laser' },
+  };
+  it('頭ボタンで頭に装備したレーザーの技が出て、右腕のスタイル(格闘)ではない', () => {
+    const h = new Harness(layout([{ kind: 'patrol', position: vec3(0, 0, 6) }]), HEAD_LASER);
+    h.step([{ type: 'HeadPressed' }]);
+    expect(h.session.player.techniqueSlot).toBe('head');
+    expect(h.session.player.action?.styleId).toBe('laser');
+    h.run(0.4);
+    expect(h.hp(1)).toBeLessThan(60);
+    expect(h.effects.some((e) => e.kind === 'muzzleFlash' && e.slot === 'head')).toBe(true);
+  });
+  it('技の実行中に別スロットのボタンを押しても中断せず、その入力はバッファもされない', () => {
+    const h = new Harness(layout([{ kind: 'patrol', position: vec3(0, 0, 20) }]), HEAD_LASER);
+    h.step([{ type: 'RightArmPressed' }]);
+    expect(h.session.player.name).toBe('attack');
+    h.step([{ type: 'HeadPressed' }]);
+    expect(h.session.player.name).toBe('attack');
+    expect(h.session.player.techniqueSlot).toBe('rightArm');
+    h.run(2.0);
+    expect(h.session.player.name).toBe('idle');
+    expect(h.session.player.techniqueSlot).toBeNull();
+    expect(h.effects.some((e) => e.kind === 'muzzleFlash')).toBe(false);
+  });
+  it('右腕と頭に同じリボルバーを装備すると残弾が別々に減る', () => {
+    const both: Settings = {
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'revolver', head: 'revolver' },
+    };
+    const h = new Harness(layout([{ kind: 'patrol', position: vec3(0, 0, 6) }]), both);
+    h.step([{ type: 'RightArmPressed' }]);
+    h.run(0.5);
+    expect(h.session.player.ammo.rightArm?.remaining).toBe(5);
+    expect(h.session.player.ammo.head?.remaining ?? 6).toBe(6);
+    h.step([{ type: 'HeadPressed' }]);
+    h.run(0.5);
+    expect(h.session.player.ammo.rightArm?.remaining).toBe(5);
+    expect(h.session.player.ammo.head?.remaining).toBe(5);
+  });
+  it('一時停止中の装備変更(syncEquipment)は次のステップを待たずに見た目の装備へ反映される', () => {
+    const h = new Harness(layout([]), defaultSettings);
+    expect(h.session.view().player.equipment.leftArm.category).toBe('magic');
+    h.session.syncEquipment({
+      ...defaultSettings,
+      equipment: { ...DEFAULT_EQUIPMENT, leftArm: 'bow' },
+    });
+    expect(h.session.view().player.equipment.leftArm).toEqual({
+      styleId: 'bow',
+      category: 'ranged',
+    });
+  });
+});
+
 describe('射撃(銃撃スタイル。F04 / F10)', () => {
   it('正面 6 m の敵に 8 ダメージが入り、エネルギー +3、弾道線とマズルフラッシュが出て、シェイクは起きない', () => {
     const h = new Harness(layout([{ kind: 'patrol', position: vec3(0, 0, 6) }]), GUN);

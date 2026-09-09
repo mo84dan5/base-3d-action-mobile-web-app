@@ -89,8 +89,6 @@ function isIgnored(req: HitRequest): boolean {
 
 function knockbackSpeedFor(kind: AttackKind, config: GameConfig): number {
   switch (kind) {
-    case 'skill':
-      return config.combat.skill.knockbackSpeed;
     case 'strongAttack':
       return config.combat.strongAttack.knockbackSpeed;
     case 'shoot':
@@ -113,8 +111,6 @@ function energyGainFor(kind: AttackKind, config: GameConfig): number {
     case 'normal3':
     case 'airAttack':
       return config.action.energyPerNormalHit;
-    case 'skill':
-      return config.action.energyPerSkillHit;
     case 'strongAttack':
       return config.action.energyPerStrongAttackHit;
     case 'shoot':

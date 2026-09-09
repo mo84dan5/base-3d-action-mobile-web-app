@@ -118,6 +118,7 @@ import {
   stepPlayer,
   type PlayerStepInput,
 } from '../domain/player/playerStep';
+import type { CostSpec } from '../domain/attackStyle/actionSpec';
 import { partMotionOf } from '../domain/player/partMotion';
 import { spinRateOf } from '../domain/player/playerSpin';
 import type { Settings } from '../domain/settings/settings';
@@ -176,6 +177,11 @@ const DOT_TICK_SECONDS = 0.5;
 const HOLD_GRACE_STEPS = 2;
 /** エネルギー不足の拒否を EN バーに点滅で知らせる時間(S02 要素 18) */
 const ENERGY_SHORT_SECONDS = 0.4;
+
+/** 押下の技がスタミナを使うか(スタミナ 0 のとき技ボタンを無効にする。F12) */
+function usesStamina(cost: CostSpec): boolean {
+  return cost.type === 'stamina' || cost.type === 'staminaPerSecond' || cost.type === 'allStamina';
+}
 
 export class GameSession implements CombatHost {
   player: PlayerState;
@@ -279,6 +285,9 @@ export class GameSession implements CombatHost {
       climbPhase: this.player.climb?.phase ?? null,
       countdownActive: this.countdownActive,
       activeTechniqueSlot: this.player.techniqueSlot,
+      movementSlots: EQUIPMENT_SLOTS.filter((s) => this.styles[s].category === 'movement'),
+      staminaEmpty: this.player.stamina.value <= 0,
+      staminaSlots: EQUIPMENT_SLOTS.filter((s) => usesStamina(this.styles[s].cost.press)),
       burstCooldownReady: isReady(this.burstCooldown),
       energyFull: isEnergyFull(this.energy),
       hasInteractTarget: this.interactTarget() !== null,
@@ -372,10 +381,8 @@ export class GameSession implements CombatHost {
     }
   }
 
-  private stepPlayer(input: FrameInput, dt: number, settings: Settings): void {
-    const { config } = this;
-    const entityDt = this.player.hitstopSteps > 0 ? 0 : dt;
-    const candidates = this.targetCandidates();
+  /** 装備(F12)をスロットごとのスタイル定義に解決する。一時停止中の変更も即時に見た目へ反映するため公開する */
+  syncEquipment(settings: Settings): void {
     for (const slot of EQUIPMENT_SLOTS) {
       const id = settings.equipment[slot];
       const resolved = resolveAttackStyleDetailed(id);
@@ -387,6 +394,13 @@ export class GameSession implements CombatHost {
       this.styles[slot] = resolved.style;
       this.styleFallbackFrom[slot] = resolved.exact ? null : id;
     }
+  }
+
+  private stepPlayer(input: FrameInput, dt: number, settings: Settings): void {
+    const { config } = this;
+    const entityDt = this.player.hitstopSteps > 0 ? 0 : dt;
+    const candidates = this.targetCandidates();
+    this.syncEquipment(settings);
     // 技の入力は 1 ステップに 1 スロットぶん渡す(F03 の優先順: 頭 > 左腕 > 右腕)。実行中の技があればそのスロットを優先する
     const slot = this.pickInputSlot(input);
     const technique = input.techniques[slot];
@@ -587,6 +601,7 @@ export class GameSession implements CombatHost {
       action: event.action,
       styleId: event.styleId,
       shape,
+      slot: this.player.techniqueSlot,
     });
   }
 
@@ -618,7 +633,13 @@ export class GameSession implements CombatHost {
       },
     );
     const styleId = this.activeStyle().id;
-    this.effect({ kind: 'muzzleFlash', position: shot.origin, yaw: this.player.yaw, styleId });
+    this.effect({
+      kind: 'muzzleFlash',
+      position: shot.origin,
+      yaw: this.player.yaw,
+      styleId,
+      ...(this.player.techniqueSlot ? { slot: this.player.techniqueSlot } : {}),
+    });
     for (const r of results) {
       this.effect({
         kind: 'tracer',
@@ -627,6 +648,7 @@ export class GameSession implements CombatHost {
         charged: shot.charged || shot.beamWidth > 0,
         chargeRatio: shot.beamWidth > 0 ? Math.max(shot.chargeRatio, 0.5) : shot.chargeRatio,
         styleId,
+        ...(this.player.techniqueSlot ? { slot: this.player.techniqueSlot } : {}),
       });
     }
   }
