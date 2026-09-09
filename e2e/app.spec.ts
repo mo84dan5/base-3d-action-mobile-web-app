@@ -640,6 +640,63 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
     await expect(page.getByTestId('style-name')).toContainText('右: ショットガン');
   });
 
+  test('S03 の装備: 左腕 行から S05 が左腕タブで開き、頭タブに切り替えて選んだ装備が頭に保存される(F12 / S05)', async ({
+    page,
+  }) => {
+    await startGame(page);
+    await tap(page, 'pause');
+    await expect(page.getByTestId('setting-equipment-head')).toContainText('レーザー');
+    await expect(page.getByTestId('setting-equipment-leftArm')).toContainText('衝撃波');
+    await tap(page, 'setting-equipment-leftArm');
+    await expect(page.locator('[data-screen="styleSelect"]')).toBeVisible();
+    await expect(page.getByTestId('slot-tab-leftArm')).toHaveClass(/on/);
+    await expect(page.getByTestId('style-category-magic')).toHaveClass(/on/);
+    await expect(page.getByTestId('style-item-shockwave')).toHaveClass(/on/);
+    await tap(page, 'slot-tab-head');
+    await expect(page.getByTestId('slot-tab-head')).toHaveClass(/on/);
+    await expect(page.getByTestId('style-category-firearm')).toHaveClass(/on/);
+    await expect(page.getByTestId('style-item-laser')).toHaveClass(/on/);
+    await tap(page, 'style-category-ranged');
+    await tap(page, 'style-item-bow');
+    const stored = await page.evaluate(() => localStorage.getItem('b3d.settings.v1'));
+    expect(stored).toContain('"head":"bow"');
+    expect(stored).toContain('"leftArm":"shockwave"');
+    await tap(page, 'style-done');
+    await expect(page.getByTestId('setting-equipment-head')).toContainText('弓');
+    await expect(page.getByTestId('setting-equipment-leftArm')).toContainText('衝撃波');
+    await tap(page, 'resume');
+    await expect(page.getByTestId('btn-head')).toContainText('弓');
+    await expect(page.getByTestId('btn-leftArm')).toContainText('衝撃波');
+    await expect(page.getByTestId('btn-attack')).toContainText('格闘');
+  });
+
+  test('HUD の技ボタンは 攻撃(右腕)・左腕・頭 の 3 つで、縦画面では左列に 頭 → 左腕 → バースト の順に並ぶ(S02)', async ({
+    page,
+  }) => {
+    await startGame(page);
+    const boxOf = async (id: string) => {
+      const b = await page.getByTestId(id).boundingBox();
+      if (!b) throw new Error(`${id} not visible`);
+      return b;
+    };
+    const attack = await boxOf('btn-attack');
+    const leftArm = await boxOf('btn-leftArm');
+    const head = await boxOf('btn-head');
+    expect(attack.width).toBeGreaterThan(leftArm.width);
+    expect(leftArm.x).toBeLessThan(attack.x);
+    expect(head.x).toBeLessThan(leftArm.x);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator(':root')).toHaveAttribute('data-orientation', 'portrait');
+    const pHead = await boxOf('btn-head');
+    const pLeft = await boxOf('btn-leftArm');
+    const pBurst = await boxOf('btn-burst');
+    const pAttack = await boxOf('btn-attack');
+    expect(pHead.y).toBeLessThan(pLeft.y);
+    expect(pLeft.y).toBeLessThan(pBurst.y);
+    expect(Math.abs(pHead.x - pLeft.x)).toBeLessThan(2);
+    expect(pAttack.x).toBeGreaterThan(pLeft.x + pLeft.width);
+  });
+
   test('S05 は 10 系統 × 10 スタイルを一覧に出し、未実装のスタイルは無い', async ({ page }) => {
     await startGame(page);
     await tap(page, 'pause');

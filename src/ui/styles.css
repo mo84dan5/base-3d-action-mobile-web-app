@@ -501,24 +501,29 @@ button {
   bottom: calc(16px + var(--safe-bottom));
   display: grid;
   grid-template-columns: 56px 56px 80px;
-  grid-template-rows: 56px 56px 56px;
-  gap: 10px;
+  grid-template-rows: 56px 56px 56px 56px;
+  gap: 8px;
   align-items: center;
   justify-items: center;
+  /* S02 横画面: 攻撃(右腕)が右下で最大。左腕はその左上、頭は左腕の左、バーストは左腕の左下、
+     インタラクトは左腕の上(2026-09-10: 頭を追加) */
   grid-template-areas:
-    'interact . .'
-    'skill jump attack'
-    'burst sprint attack';
+    '. interact .'
+    'head left-arm .'
+    'burst jump attack'
+    '. sprint attack';
 }
 
 :root[data-orientation='portrait'] .action-buttons {
   right: calc(12px + var(--safe-right));
   bottom: calc(24px + var(--safe-bottom));
   grid-template-columns: 56px 80px;
-  grid-template-rows: 56px 80px 56px;
+  grid-template-rows: 56px 56px 80px 56px;
+  /* S02 縦画面: 左列 インタラクト・頭・左腕・バースト / 右列 ジャンプ・攻撃・スプリント */
   grid-template-areas:
     'interact jump'
-    'skill attack'
+    'head .'
+    'left-arm attack'
     'burst sprint';
 }
 
@@ -554,8 +559,36 @@ button {
   font-size: 16px;
 }
 
-.action-btn.skill {
-  grid-area: skill;
+.action-btn.left-arm {
+  grid-area: left-arm;
+}
+
+.action-btn.head {
+  grid-area: head;
+}
+
+/* 技ボタン(F12): ボタン内にスロット名 + スタイルの略称 */
+.action-btn.technique {
+  flex-direction: column;
+  gap: 1px;
+}
+
+.action-btn.technique .cd-label {
+  position: static;
+  background: transparent;
+  padding: 0;
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.85;
+  max-width: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-btn.attack.technique .cd-label {
+  font-size: 12px;
+  max-width: 74px;
 }
 
 .action-btn.burst {
@@ -602,8 +635,15 @@ button {
   pointer-events: none;
 }
 
-.action-btn.skill .ring {
-  --ring-color: rgba(255, 255, 255, 0.55);
+.action-btn.left-arm .ring,
+.action-btn.head .ring {
+  display: none;
+  --ring-color: var(--cyan);
+}
+
+.action-btn.left-arm.charging .ring,
+.action-btn.head.charging .ring {
+  display: block;
 }
 
 .action-btn.burst .ring {
@@ -611,7 +651,9 @@ button {
 }
 
 .action-btn.burst.full,
-.action-btn.attack.full {
+.action-btn.attack.full,
+.action-btn.left-arm.full,
+.action-btn.head.full {
   animation: burst-glow 1s ease-in-out infinite alternate;
 }
 
@@ -944,6 +986,29 @@ button {
 
 .style-dialog {
   width: min(760px, 90%);
+}
+
+/* スロットタブ(頭 / 右腕 / 左腕。S05 要素 6) */
+.slot-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px 16px 6px;
+  flex: none;
+}
+
+.slot-tab {
+  flex: 1;
+  min-height: 40px;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+}
+
+.slot-tab.on {
+  background: #fff;
+  color: #06202c;
 }
 
 .style-tabs {

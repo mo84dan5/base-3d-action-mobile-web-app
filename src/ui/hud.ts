@@ -147,11 +147,11 @@ export class Hud {
     group.dataset.testid = 'action-buttons';
     group.append(
       this.button('interact', 'インタラクト', 'interact', false),
-      this.button('head', '頭', 'head', true),
-      this.button('leftArm', '左腕', 'left-arm', true),
+      this.button('head', '頭', 'head technique', true),
+      this.button('leftArm', '左腕', 'left-arm technique', true),
       this.button('burst', 'バースト', 'burst', true),
       this.button('jump', 'ジャンプ', 'jump', false),
-      this.button('attack', '攻撃', 'attack', true),
+      this.button('attack', '攻撃', 'attack technique', true),
       this.button('sprint', 'スプリント', 'sprint', false),
     );
     hudLayer.append(top, this.countdown, this.indicator, this.interactMessage, this.stick, group);
