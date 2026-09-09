@@ -118,6 +118,7 @@ import {
   stepPlayer,
   type PlayerStepInput,
 } from '../domain/player/playerStep';
+import { partMotionOf } from '../domain/player/partMotion';
 import { spinRateOf } from '../domain/player/playerSpin';
 import type { Settings } from '../domain/settings/settings';
 import type { StageLayout } from '../domain/stage/stageLayout';
@@ -1187,6 +1188,7 @@ export class GameSession implements CombatHost {
         rightArm: { styleId: this.styles.rightArm.id, category: this.styles.rightArm.category },
         leftArm: { styleId: this.styles.leftArm.id, category: this.styles.leftArm.category },
       },
+      partMotion: partMotionOf(p),
       guarding: p.name === 'guard' && p.action?.phase === 'guard',
       chargeCameraDistance:
         p.name === 'charge' && p.action?.spec.kind === 'charge'

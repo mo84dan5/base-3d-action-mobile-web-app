@@ -19,7 +19,8 @@ import { projectileVisualOf, type ProjectileVisual } from './weaponVisual';
 // (V 字のブーメラン・十字の手裏剣・槍・爆弾・石・ロケット・魔弾・ヨーヨーなど)、設置物は低ポリの多面体、
 // 召喚体は小さなカプセル、ガードは前方の半透明の板。寿命の残りはリングで示す。
 
-const CATEGORY_COLORS: Readonly<Record<StyleCategory, string>> = {
+/** 系統別の色(デザインディレクション エフェクト)。付属物にも使う */
+export const CATEGORY_COLORS: Readonly<Record<StyleCategory, string>> = {
   sword: '#FFFFFF',
   strike: '#E6EEF5',
   polearm: '#8FE3FF',

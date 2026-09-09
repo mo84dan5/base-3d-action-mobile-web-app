@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { ScreenPoint, ScreenProjector } from '../../application/ports';
-import type { EnemyView, ViewState } from '../../application/viewState';
+import type { EnemyView, PlayerView, ViewState } from '../../application/viewState';
 import type { GameConfig } from '../../domain/config/gameConfig';
 import type { Vec3 } from '../../domain/math/vec3';
 import {
@@ -11,6 +11,7 @@ import {
 } from '../../domain/orientation/orientation';
 import { qualityPreset, type Quality } from '../../domain/settings/settings';
 import type { StageLayout } from '../../domain/stage/stageLayout';
+import { buildCharacterParts, CharacterAnimator } from './characterParts';
 import { buildStageGeometry, type StageGeometry } from './stageGeometry';
 import { StyleVisuals } from './styleVisuals';
 import { VfxPlayer } from './vfxPlayer';
@@ -18,11 +19,13 @@ import { VfxPlayer } from './vfxPlayer';
 // Three.js による描画(F06 表示品質、F07、F09 手順 4、デザインディレクション)。
 // UI は描かない(HTML/CSS の上に canvas を敷く)。物理状態は前後フレームで補間して描く(F05)。
 
-const PLAYER_COLOR = '#4d7cc4';
 const DUMMY_COLOR = '#b8a680';
 const PATROL_COLOR = '#7a4b9e';
 const FLASH_WHITE = new THREE.Color('#ffffff');
-const FLASH_RED = new THREE.Color('#ff3b30');
+
+/** 脚を振らない状態(空中・滑空・崖登り) */
+const AIRBORNE_STATES = new Set<PlayerView['state']>(['jump', 'fall', 'glide', 'climb']);
+const FRAME_SECONDS = 1 / 60;
 
 interface CharacterVisual {
   readonly root: THREE.Group;
@@ -49,7 +52,7 @@ export class GameRenderer implements ScreenProjector {
   readonly styleVisuals: StyleVisuals;
   private readonly light: THREE.DirectionalLight;
   private readonly stage: StageGeometry;
-  private readonly player: CharacterVisual;
+  private readonly player: CharacterAnimator;
   /** 回転攻撃の表示用に yaw へ加算する角度(F11。ロジックの yaw は変えない) */
   private spinAngle = 0;
   private readonly enemies = new Map<number, CharacterVisual>();
@@ -109,13 +112,8 @@ export class GameRenderer implements ScreenProjector {
       2,
       8,
     );
-    this.player = this.character(
-      this.playerGeometry,
-      PLAYER_COLOR,
-      config.physics.playerCapsuleHeight,
-      true,
-    );
-    this.scene.add(this.player.root);
+    this.player = new CharacterAnimator(buildCharacterParts());
+    this.scene.add(this.player.parts.root);
 
     this.vfx = new VfxPlayer(config, quality, this.playerGeometry);
     this.scene.add(this.vfx.group);
@@ -253,6 +251,28 @@ export class GameRenderer implements ScreenProjector {
     return [v.x, v.y, v.z];
   }
 
+  /** デバッグ・E2E 用: パーツの回転角と付属物(F12) */
+  playerPartsInfo(): {
+    angles: Record<'head' | 'rightArm' | 'leftArm' | 'rightLeg' | 'leftLeg', number>;
+    attachments: Record<'head' | 'rightArm' | 'leftArm', number>;
+  } {
+    const a = this.player.parts.attachments;
+    return {
+      angles: {
+        head: this.player.angle('head'),
+        rightArm: this.player.angle('rightArm'),
+        leftArm: this.player.angle('leftArm'),
+        rightLeg: this.player.angle('rightLeg'),
+        leftLeg: this.player.angle('leftLeg'),
+      },
+      attachments: {
+        head: a.head.children.length,
+        rightArm: a.rightArm.children.length,
+        leftArm: a.leftArm.children.length,
+      },
+    };
+  }
+
   drawCalls(): number {
     return this.renderer.info.render.calls;
   }
@@ -260,19 +280,32 @@ export class GameRenderer implements ScreenProjector {
   private syncPlayer(prev: ViewState, curr: ViewState, alpha: number): void {
     const p = curr.player;
     const pos = lerpVec(prev.player.position, p.position, alpha);
-    this.player.root.position.copy(pos);
+    const { root, figure } = this.player.parts;
+    root.position.copy(pos);
     this.spinAngle = p.spinRate > 0 ? (this.spinAngle + p.spinRate / 60) % (Math.PI * 2) : 0;
-    this.player.root.rotation.set(0, lerpAngle(prev.player.yaw, p.yaw, alpha) + this.spinAngle, 0);
-    this.player.root.visible = p.visible;
-    this.player.body.material.emissive.copy(FLASH_RED).multiplyScalar(p.flashOpacity);
+    root.rotation.set(0, lerpAngle(prev.player.yaw, p.yaw, alpha) + this.spinAngle, 0);
+    root.visible = p.visible;
+    // 倒れ: 足元を支点に横へ倒す(6 パーツ全体)
     const tilt = (p.defeatProgress * Math.PI) / 2;
-    this.player.body.rotation.set(0, 0, tilt);
-    this.player.body.position.y =
-      this.config.physics.playerCapsuleHeight / 2 -
-      Math.sin(tilt) *
-        (this.config.physics.playerCapsuleHeight / 2 - this.config.physics.playerCapsuleRadius);
+    figure.rotation.set(0, 0, tilt);
     const climbTilt = p.state === 'climb' ? 0.15 : p.state === 'glide' ? -0.35 : 0;
-    this.player.root.rotation.x = climbTilt;
+    root.rotation.x = climbTilt;
+    const grounded = !AIRBORNE_STATES.has(p.state);
+    this.player.update(
+      {
+        motion: p.partMotion,
+        speed: Math.hypot(p.velocity.x, p.velocity.z),
+        grounded,
+        dashing: p.state === 'dash',
+        equipment: {
+          head: p.equipment.head.category,
+          rightArm: p.equipment.rightArm.category,
+          leftArm: p.equipment.leftArm.category,
+        },
+        flashOpacity: p.flashOpacity,
+      },
+      FRAME_SECONDS,
+    );
   }
 
   private syncEnemies(prev: ViewState, curr: ViewState, alpha: number): void {

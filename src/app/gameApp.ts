@@ -167,6 +167,8 @@ export class GameApp {
         ) ?? [],
       project: (name: string) => this.renderer?.projectObject(name) ?? null,
       vfxBudget: () => this.renderer?.vfx.budgetInfo() ?? null,
+      /** パーツの回転角と付属物の数(F12) */
+      playerParts: () => this.renderer?.playerPartsInfo() ?? null,
       /** 発射体・設置物・召喚体の表示(武器別の言語の確認用) */
       styleVisuals: () =>
         this.renderer?.styleVisuals.group.children.map((o) => ({

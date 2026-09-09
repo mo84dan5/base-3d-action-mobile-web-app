@@ -8,6 +8,10 @@ declare global {
       screen: () => string;
       grantEnergy?: (amount: number) => void;
       vfxAll?: () => string[];
+      playerParts?: () => {
+        angles: Record<'head' | 'rightArm' | 'leftArm' | 'rightLeg' | 'leftLeg', number>;
+        attachments: Record<'head' | 'rightArm' | 'leftArm', number>;
+      } | null;
     };
   }
 }
@@ -774,6 +778,32 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
     const energy = await page.evaluate(() => window.__b3dDebug?.view()?.hud.energyRatio ?? 1);
     // 消費 3 とヒットの獲得 3 で相殺されるため、上限は 0.5(獲得だけなら 0.53 になる)
     expect(energy).toBeLessThanOrEqual(0.5);
+  });
+});
+
+test.describe('パーツ分けキャラクター(F12 / デザインディレクション キャラクター)', () => {
+  test('頭・右腕・左腕に装備の付属物が付き、攻撃ボタンで右腕が前へ振れる', async ({ page }) => {
+    await page.goto('./?debug=1');
+    const start = page.getByTestId('start');
+    await expect(start).toBeEnabled({ timeout: 30_000 });
+    await start.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
+    await page.waitForFunction(() => window.__b3dDebug?.view()?.hud.phase === 'playing', null, {
+      timeout: 20_000,
+    });
+    const parts = await page.evaluate(() => window.__b3dDebug?.playerParts?.());
+    expect(parts?.attachments).toEqual({ head: 1, rightArm: 1, leftArm: 1 });
+    expect(parts?.angles.rightArm).toBe(0);
+    await tap(page, 'btn-attack');
+    await page.waitForFunction(
+      () => (window.__b3dDebug?.playerParts?.()?.angles.rightArm ?? 0) < -0.5,
+      null,
+      { timeout: 2_000 },
+    );
+    await page.waitForFunction(
+      () => Math.abs(window.__b3dDebug?.playerParts?.()?.angles.rightArm ?? 1) < 1e-6,
+      null,
+      { timeout: 3_000 },
+    );
   });
 });
 

@@ -1,4 +1,5 @@
 import type { EquipmentSlot } from '../domain/equipment/equipment';
+import type { PartMotion } from '../domain/player/partMotion';
 import type { ButtonStates } from '../domain/action/actionGate';
 import type { GameResult, Stats } from '../domain/combat/result';
 import type { DeathProgress, EnemyKind } from '../domain/enemy/enemyState';
@@ -39,6 +40,8 @@ export interface PlayerView {
   readonly equipment: Readonly<
     Record<EquipmentSlot, { readonly styleId: string; readonly category: StyleCategory }>
   >;
+  /** 技のモーション(F12): 実行中の技のスロットのパーツと進行。技の実行中でなければ null */
+  readonly partMotion: PartMotion | null;
   /** ガード中(受けの窓の中) */
   readonly guarding: boolean;
   /** タメ中のカメラ距離(スナイパー)。null は既定 */
