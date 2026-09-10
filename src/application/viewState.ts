@@ -1,5 +1,6 @@
 import type { EquipmentSlot } from '../domain/equipment/equipment';
 import type { PartMotion } from '../domain/player/partMotion';
+import type { LocomotionType } from '../domain/locomotion/locomotion';
 import type { ButtonStates } from '../domain/action/actionGate';
 import type { GameResult, Stats } from '../domain/combat/result';
 import type { DeathProgress, EnemyKind } from '../domain/enemy/enemyState';
@@ -42,6 +43,8 @@ export interface PlayerView {
   >;
   /** 技のモーション(F12): 実行中の技のスロットのパーツと進行。技の実行中でなければ null */
   readonly partMotion: PartMotion | null;
+  /** 脚スロットの移動タイプ(F12)。脚パーツの表示用。未実装のタイプもそのまま渡す */
+  readonly locomotion: LocomotionType;
   /** ガード中(受けの窓の中) */
   readonly guarding: boolean;
   /** タメ中のカメラ距離(スナイパー)。null は既定 */

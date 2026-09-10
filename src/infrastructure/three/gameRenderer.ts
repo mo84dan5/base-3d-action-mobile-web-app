@@ -302,6 +302,7 @@ export class GameRenderer implements ScreenProjector {
           rightArm: p.equipment.rightArm.category,
           leftArm: p.equipment.leftArm.category,
         },
+        locomotion: p.locomotion,
         flashOpacity: p.flashOpacity,
       },
       FRAME_SECONDS,

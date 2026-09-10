@@ -4,7 +4,7 @@ import { findAttackStyle } from '../attackStyle/attackStyleCatalog';
 
 export type EquipmentSlot = 'head' | 'rightArm' | 'leftArm';
 
-/** 表示順(S03 の装備行・S05 のスロットタブ) */
+/** 技のスロットの表示順(HUD の補助表示・S05 のスロットタブ) */
 export const EQUIPMENT_SLOTS: readonly EquipmentSlot[] = ['head', 'rightArm', 'leftArm'];
 
 export const SLOT_LABELS: Readonly<Record<EquipmentSlot, string>> = {
@@ -17,6 +17,20 @@ export const SLOT_LABELS: Readonly<Record<EquipmentSlot, string>> = {
 export const SLOT_PRIORITY: readonly EquipmentSlot[] = ['head', 'leftArm', 'rightArm'];
 
 export type Equipment = Readonly<Record<EquipmentSlot, string>>;
+
+/**
+ * S05 装備組み替えのスロット。技のスロット(頭・右腕・左腕)に脚を加えたもの。
+ * 脚は攻撃スタイルではなく移動タイプ(F12)を選ぶため `EquipmentSlot` には含めない。
+ */
+export type AssemblySlot = EquipmentSlot | 'legs';
+
+/** 表示順(S05 のスロットタブ) */
+export const ASSEMBLY_SLOTS: readonly AssemblySlot[] = ['head', 'rightArm', 'leftArm', 'legs'];
+
+export const ASSEMBLY_SLOT_LABELS: Readonly<Record<AssemblySlot, string>> = {
+  ...SLOT_LABELS,
+  legs: '脚',
+};
 
 export const DEFAULT_EQUIPMENT: Equipment = {
   head: 'laser',

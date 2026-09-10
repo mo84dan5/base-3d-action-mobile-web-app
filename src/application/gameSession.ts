@@ -122,6 +122,7 @@ import type { CostSpec } from '../domain/attackStyle/actionSpec';
 import { partMotionOf } from '../domain/player/partMotion';
 import { spinRateOf } from '../domain/player/playerSpin';
 import type { Settings } from '../domain/settings/settings';
+import { DEFAULT_LOCOMOTION, type LocomotionType } from '../domain/locomotion/locomotion';
 import type { StageLayout } from '../domain/stage/stageLayout';
 import { isStaminaLow } from '../domain/stamina/stamina';
 import type { StickInput } from '../domain/stick/virtualStick';
@@ -213,6 +214,8 @@ export class GameSession implements CombatHost {
   private lastPlayerDamage: DamageNumber | null = null;
   /** スロットごとの装備スタイル(F12)。settings から毎ステップ解決する */
   private styles: Record<EquipmentSlot, AttackStyleDefinition>;
+  /** 脚スロットの移動タイプ(F12)。表示用に PlayerView へ渡す */
+  private locomotion: LocomotionType = DEFAULT_LOCOMOTION;
   private styleFallbackFrom: Record<EquipmentSlot, string | null> = {
     head: null,
     rightArm: null,
@@ -383,6 +386,7 @@ export class GameSession implements CombatHost {
 
   /** 装備(F12)をスロットごとのスタイル定義に解決する。一時停止中の変更も即時に見た目へ反映するため公開する */
   syncEquipment(settings: Settings): void {
+    this.locomotion = settings.locomotion;
     for (const slot of EQUIPMENT_SLOTS) {
       const id = settings.equipment[slot];
       const resolved = resolveAttackStyleDetailed(id);
@@ -1211,6 +1215,7 @@ export class GameSession implements CombatHost {
         leftArm: { styleId: this.styles.leftArm.id, category: this.styles.leftArm.category },
       },
       partMotion: partMotionOf(p),
+      locomotion: this.locomotion,
       guarding: p.name === 'guard' && p.action?.phase === 'guard',
       chargeCameraDistance:
         p.name === 'charge' && p.action?.spec.kind === 'charge'

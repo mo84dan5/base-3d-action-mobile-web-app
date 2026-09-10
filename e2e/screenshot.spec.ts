@@ -24,4 +24,12 @@ test('screenshots', async ({ page }) => {
     .dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
   await page.waitForTimeout(300);
   await page.screenshot({ path: 'test-results/shot-pause-portrait.png' });
+  await page
+    .getByTestId('setting-equipment')
+    .dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: 'test-results/shot-equipment-portrait.png' });
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: 'test-results/shot-equipment-landscape.png' });
 });

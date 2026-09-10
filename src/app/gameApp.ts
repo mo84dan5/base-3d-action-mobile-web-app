@@ -35,8 +35,9 @@ import { BvhTerrainCollider } from '../infrastructure/three/bvhTerrainCollider';
 import { GameRenderer } from '../infrastructure/three/gameRenderer';
 import { Hud } from '../ui/hud';
 import { PauseMenu } from '../ui/pauseMenu';
-import { StyleSelectModal } from '../ui/styleSelectModal';
+import { EquipmentModal } from '../ui/equipmentModal';
 import { withSlot } from '../domain/equipment/equipment';
+import { CharacterPreview } from '../infrastructure/three/characterPreview';
 import { ResultScreen } from '../ui/resultScreen';
 import { TitleScreen } from '../ui/titleScreen';
 
@@ -69,7 +70,8 @@ export class GameApp {
   private readonly title: TitleScreen;
   private readonly hud: Hud;
   private readonly pause: PauseMenu;
-  private readonly styleSelect: StyleSelectModal;
+  private readonly equipment: EquipmentModal;
+  private preview: CharacterPreview | null = null;
   private readonly result: ResultScreen;
   private pointer: PointerInputAdapter | null = null;
   private keyboard: KeyboardInputAdapter | null = null;
@@ -94,20 +96,23 @@ export class GameApp {
       onChange: (s) => this.applySettings(s),
       onResume: () => this.dispatch({ type: 'resumePressed' }),
       onTitle: () => this.dispatch({ type: 'titlePressed' }),
-      onOpenStyleSelect: (slot) => {
-        this.styleSelect.showSlot(slot);
-        this.styleSelect.show();
+      onOpenEquipment: () => {
+        this.equipment.showSlot('rightArm');
+        this.equipment.show();
       },
     });
-    this.styleSelect = new StyleSelectModal(this.settings.equipment, {
-      onSelect: (slot, id) => {
+    this.equipment = new EquipmentModal(this.settings.equipment, this.settings.locomotion, {
+      onSelectStyle: (slot, id) =>
         this.applySettings({
           ...this.settings,
           equipment: withSlot(this.settings.equipment, slot, id),
-        });
-        this.pause.setEquipment(slot, id);
+        }),
+      onSelectLocomotion: (locomotion) => this.applySettings({ ...this.settings, locomotion }),
+      onClose: () => this.equipment.hide(),
+      createPreview: (canvas, initial) => {
+        this.preview = new CharacterPreview(canvas, initial);
+        return this.preview;
       },
-      onClose: () => this.styleSelect.hide(),
     });
     this.result = new ResultScreen(
       () => this.dispatch({ type: 'retryPressed' }),
@@ -115,13 +120,13 @@ export class GameApp {
     );
     this.hud.el.hidden = true;
     this.pause.el.hidden = true;
-    this.styleSelect.el.hidden = true;
+    this.equipment.el.hidden = true;
     this.result.el.hidden = true;
     root.append(
       this.canvas,
       this.hud.el,
       this.pause.el,
-      this.styleSelect.el,
+      this.equipment.el,
       this.result.el,
       this.title.el,
     );
@@ -169,6 +174,8 @@ export class GameApp {
       vfxBudget: () => this.renderer?.vfx.budgetInfo() ?? null,
       /** パーツの回転角と付属物の数(F12) */
       playerParts: () => this.renderer?.playerPartsInfo() ?? null,
+      /** S05 プレビュー(小窓)の状態 */
+      preview: () => this.preview?.info() ?? null,
       /** 発射体・設置物・召喚体の表示(武器別の言語の確認用) */
       styleVisuals: () =>
         this.renderer?.styleVisuals.group.children.map((o) => ({
@@ -281,7 +288,7 @@ export class GameApp {
     if (s === 'pause') this.pause.show();
     else {
       this.pause.hide();
-      this.styleSelect.hide();
+      this.equipment.hide();
     }
     if (s === 'result' && this.session?.result)
       this.result.show(this.session.result, this.session.stats);
@@ -332,6 +339,7 @@ export class GameApp {
     if (change.orientationChanged && this.flow.screen === 'play') this.cancelInputs();
     this.regions = computeInputRegions(change.size.width, change.size.height, change.orientation);
     this.renderer?.resize(change.size, change.orientation);
+    this.preview?.resize();
     if (this.flow.screen !== 'title' && this.settings.stickMode === 'fixed') this.showFixedStick();
     if (!this.flow.running && this.flow.screen !== 'title') this.renderer?.renderOnce();
   }
@@ -347,13 +355,17 @@ export class GameApp {
   private applySettings(next: Settings): void {
     const prev = this.settings;
     this.settings = next;
+    this.pause.setSettings(next);
     this.store.save(serializeSettings(next));
     if (prev.quality !== next.quality) this.renderer?.applyQuality(next.quality);
     this.hud.setShowFps(next.showFps);
     if (next.stickMode === 'fixed') this.showFixedStick();
     else this.hud.setStick(null, true);
-    // 装備の変更は一時停止中(S05 の背景)でも付属物に反映する(キャラクター.md)
-    if (this.session && prev.equipment !== next.equipment) {
+    // 装備・移動タイプの変更は一時停止中(S05 の背景)でも付属物・脚に反映する(キャラクター.md)
+    if (
+      this.session &&
+      (prev.equipment !== next.equipment || prev.locomotion !== next.locomotion)
+    ) {
       this.session.syncEquipment(next);
       this.currView = this.session.view();
       if (!this.flow.running) this.render(1);

@@ -808,6 +808,11 @@ button {
   gap: 12px;
 }
 
+/* 設定項目は縮めない(縮めると縦画面でラベルが前の項目の操作部に重なる。S03 / F09) */
+.dialog-body > * {
+  flex: none;
+}
+
 .setting-row {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -961,7 +966,7 @@ button {
   background: var(--cyan);
 }
 
-/* ---- S03 の攻撃スタイル行 ---- */
+/* ---- S03 の装備行(S05 への入口) ---- */
 .style-open-btn {
   display: inline-flex;
   align-items: center;
@@ -979,31 +984,60 @@ button {
   font-weight: 800;
 }
 
-/* ---- S05 攻撃スタイル選択モーダル ---- */
-.style-screen {
+:root[data-orientation='portrait'] .style-open-btn {
+  width: 100%;
+  justify-content: space-between;
+}
+
+/* ---- S05 装備組み替えモーダル(全画面) ---- */
+.equipment-screen {
   z-index: 41;
-}
-
-.style-dialog {
-  width: min(760px, 90%);
-}
-
-/* スロットタブ(頭 / 右腕 / 左腕。S05 要素 6) */
-.slot-tabs {
   display: flex;
-  gap: 6px;
-  padding: 4px 16px 6px;
+  flex-direction: column;
+  background: #1b232c;
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
+.equipment-screen > * {
   flex: none;
 }
 
+/* スロットタブ(頭 / 右腕 / 左腕 / 脚。S05 要素 2) */
+.slot-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 0 16px 6px;
+}
+
+:root[data-orientation='portrait'] .slot-tabs {
+  grid-template-columns: 1fr 1fr;
+}
+
 .slot-tab {
-  flex: 1;
-  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 44px;
+  padding: 2px 6px;
   border: 1px solid var(--ui-line);
   border-radius: 10px;
   background: transparent;
   color: inherit;
   font-weight: 700;
+  overflow: hidden;
+}
+
+.slot-tab-value {
+  max-width: 100%;
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .slot-tab.on {
@@ -1011,13 +1045,71 @@ button {
   color: #06202c;
 }
 
+/* 本文: 横画面はプレビュー(幅固定)| スクロール領域(系統タブ + 一覧 / 詳細) */
+.equipment-main {
+  flex: 1 1 auto !important;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 12px;
+  padding: 0 16px;
+}
+
+:root[data-orientation='portrait'] .equipment-main {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 180px minmax(0, 1fr);
+}
+
+/* プレビュー(小窓。S05 要素 3)。操作しないので touch-action はルートの none のまま */
+.equipment-preview {
+  min-height: 0;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1b232c;
+}
+
+.equipment-preview-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.equipment-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  touch-action: pan-y;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.equipment-scroll > * {
+  flex: none;
+}
+
+.equipment-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+:root[data-orientation='portrait'] .equipment-columns {
+  grid-template-columns: 1fr;
+}
+
 .style-tabs {
   display: flex;
   gap: 6px;
-  padding: 4px 16px 8px;
+  padding: 4px 0;
   overflow-x: auto;
   touch-action: pan-x;
   flex: none;
+}
+
+.style-tabs[hidden] {
+  display: none;
 }
 
 .style-tab {
@@ -1035,17 +1127,6 @@ button {
   background: var(--cyan);
   color: #06202c;
   font-weight: 800;
-}
-
-.style-body {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding-bottom: 8px;
-}
-
-:root[data-orientation='portrait'] .style-body {
-  grid-template-columns: 1fr;
 }
 
 .style-list {
@@ -1124,6 +1205,6 @@ button {
   font-weight: 800;
 }
 
-.style-dialog .dialog-foot {
+.equipment-screen .dialog-foot {
   justify-content: flex-end;
 }

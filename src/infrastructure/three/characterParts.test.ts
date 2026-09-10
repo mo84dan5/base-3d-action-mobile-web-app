@@ -4,6 +4,7 @@ import type { StyleCategory } from '../../domain/attackStyle/actionSpec';
 import {
   armSwingAngle,
   buildCharacterParts,
+  buildLegs,
   CharacterAnimator,
   headNodAngle,
   legSwing,
@@ -31,6 +32,7 @@ const pose = (extra: Partial<PlayerPose> = {}): PlayerPose => ({
   grounded: true,
   dashing: false,
   equipment: { head: 'firearm', rightArm: 'sword', leftArm: 'magic' },
+  locomotion: 'biped',
   flashOpacity: 0,
   ...extra,
 });
@@ -41,7 +43,9 @@ describe('パーツ分けキャラクター(デザインディレクション �
     expect(parts.pivots.head.position.y).toBeCloseTo(1.32);
     expect(parts.pivots.rightArm.position.x).toBeCloseTo(-0.34);
     expect(parts.pivots.leftArm.position.x).toBeCloseTo(0.34);
-    expect(parts.pivots.rightLeg.position.y).toBeCloseTo(0.67);
+    expect(parts.legs.pivots.rightLeg.position.y).toBeCloseTo(0.67);
+    expect(parts.legs.pivots.leftLeg.position.x).toBeCloseTo(0.13);
+    expect(parts.legs.group.parent).toBe(parts.figure);
     expect(parts.root.getObjectByName('torso')).toBeInstanceOf(THREE.Mesh);
   });
   it('どの系統の組み合わせでもメッシュは 15 以内で、付属物は装備を変えた瞬間に差し替わる', () => {
@@ -129,5 +133,34 @@ describe('歩行の脚', () => {
     expect(anim.angle('leftLeg')).toBeCloseTo(-22 * DEG, 3);
     anim.update(pose({ speed: 0 }), 0.15);
     expect(anim.angle('rightLeg')).toBe(0);
+  });
+});
+
+describe('脚パーツと移動タイプ(F12 / キャラクター.md)', () => {
+  it('二足の脚グループは股の支点 2 つ・メッシュ 2 つ', () => {
+    const legs = buildLegs('biped');
+    expect(legs.locomotion).toBe('biped');
+    expect(legs.group.name).toBe('legs');
+    let n = 0;
+    legs.group.traverse((o) => {
+      if (o instanceof THREE.Mesh) n++;
+    });
+    expect(n).toBe(2);
+  });
+  it('未実装の移動タイプは二足のパーツを使い、実効タイプが同じなら作り直さない', () => {
+    const parts = buildCharacterParts();
+    const anim = new CharacterAnimator(parts);
+    const before = parts.legs;
+    anim.update(pose({ locomotion: 'hover' }), 1 / 60);
+    expect(parts.legs).toBe(before);
+    expect(parts.legs.locomotion).toBe('biped');
+    expect(meshCount(parts)).toBeLessThanOrEqual(15);
+    expect(buildLegs('vehicle').locomotion).toBe('biped');
+  });
+  it('脚の振りは差し替え後の脚グループに掛かる', () => {
+    const parts = buildCharacterParts();
+    const anim = new CharacterAnimator(parts);
+    anim.update(pose({ speed: 1 }), 1 / 6);
+    expect(parts.legs.pivots.rightLeg.rotation.x).toBeCloseTo(22 * DEG, 3);
   });
 });

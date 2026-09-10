@@ -1,12 +1,3 @@
-import { CATEGORY_LABELS } from '../domain/attackStyle/actionSpec';
-import {
-  EQUIPMENT_SLOTS,
-  SLOT_LABELS,
-  withSlot,
-  type EquipmentSlot,
-} from '../domain/equipment/equipment';
-import { findAttackStyle } from '../domain/attackStyle/attackStyleCatalog';
-import { isStyleImplemented } from '../domain/attackStyle/styleResolver';
 import {
   SENSITIVITY_MAX,
   SENSITIVITY_MIN,
@@ -18,21 +9,13 @@ import {
 import { el, onPress } from './dom';
 
 // S03 ポーズメニュー。設定は変更のたびに onChange で通知し、呼び出し側が保存・反映する。
-// 攻撃スタイルは S05(専用モーダル)で選ぶ。
+// 装備(頭 / 右腕 / 左腕 / 脚)は S05 装備組み替え(全画面モーダル)で選び、S03 には入口のボタンだけを置く。
 export interface PauseMenuCallbacks {
   readonly onChange: (settings: Settings) => void;
   readonly onResume: () => void;
   readonly onTitle: () => void;
-  /** 装備行の「変更」。S05 をそのスロットで開く(F12) */
-  readonly onOpenStyleSelect: (slot: EquipmentSlot) => void;
-}
-
-/** S03 の攻撃スタイル行に出す表示名: 「格闘(剣術)」。未実装なら「未実装」を添える */
-export function styleRowLabel(id: string): string {
-  const style = findAttackStyle(id);
-  if (!style) return `${id}(未実装)`;
-  const base = `${style.name}(${CATEGORY_LABELS[style.category]})`;
-  return isStyleImplemented(style) ? base : `${base} 未実装`;
+  /** 「装備を組み替える」。S05 を開く(F12) */
+  readonly onOpenEquipment: () => void;
 }
 
 export class PauseMenu {
@@ -40,7 +23,6 @@ export class PauseMenu {
   private settings: Settings;
   private readonly sensitivity: HTMLInputElement;
   private readonly sensitivityValue: HTMLElement;
-  private readonly styleLabels = new Map<EquipmentSlot, HTMLElement>();
   private readonly segments = new Map<string, HTMLButtonElement[]>();
 
   constructor(
@@ -92,7 +74,7 @@ export class PauseMenu {
         ],
         initial.stickMode,
       ),
-      ...EQUIPMENT_SLOTS.map((slot) => this.styleRow(slot, initial.equipment[slot])),
+      this.equipmentRow(),
       this.segmentRow<Quality>(
         '表示品質',
         'quality',
@@ -122,23 +104,23 @@ export class PauseMenu {
     this.callbacks.onChange(next);
   }
 
-  private styleRow(slot: EquipmentSlot, id: string): HTMLElement {
+  /** 装備行(S03 要素 5a): S05 装備組み替えへの入口。装備の内容は S05 側に出す */
+  private equipmentRow(): HTMLElement {
     const row = el('div', 'setting-row');
     const button = el('button', 'style-open-btn');
-    button.dataset.testid = `setting-equipment-${slot}`;
-    const label = el('span', 'style-open-label', styleRowLabel(id));
-    this.styleLabels.set(slot, label);
-    button.append(label, el('span', 'style-open-arrow', '変更 ›'));
-    onPress(button, () => this.callbacks.onOpenStyleSelect(slot));
-    row.append(el('span', '', `装備: ${SLOT_LABELS[slot]}`), button);
+    button.dataset.testid = 'setting-equipment';
+    button.append(
+      el('span', 'style-open-label', '装備を組み替える'),
+      el('span', 'style-open-arrow', '›'),
+    );
+    onPress(button, () => this.callbacks.onOpenEquipment());
+    row.append(el('span', '', '装備'), button);
     return row;
   }
 
-  /** S05 で選んだスタイルを装備行に反映する(保存は呼び出し側が applySettings で行う)。 */
-  setEquipment(slot: EquipmentSlot, id: string): void {
-    this.settings = { ...this.settings, equipment: withSlot(this.settings.equipment, slot, id) };
-    const label = this.styleLabels.get(slot);
-    if (label) label.textContent = styleRowLabel(id);
+  /** S05 で変えた装備を保持する(S03 の他の項目を変えたときに上書きしないため)。 */
+  setSettings(settings: Settings): void {
+    this.settings = settings;
   }
 
   private toggleRow(

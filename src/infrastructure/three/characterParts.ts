@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import type { StyleCategory } from '../../domain/attackStyle/actionSpec';
 import type { EquipmentSlot } from '../../domain/equipment/equipment';
 import type { PartMotion } from '../../domain/player/partMotion';
+import { effectiveLocomotion, type LocomotionType } from '../../domain/locomotion/locomotion';
 import { CATEGORY_COLORS } from './styleVisuals';
 
 // パーツ分けキャラクター(デザインディレクション キャラクター)。
 // 胴 + 頭 + 右腕 + 左腕 + 右脚 + 左脚 を支点(首・肩・股)回りに回し、
-// 頭・右腕・左腕には装備の系統に応じた付属物を付ける。原点は足元、+Z が正面。
+// 頭・右腕・左腕には装備の系統に応じた付属物を付ける。脚は移動タイプ(F12)で差し替える脚グループ。原点は足元、+Z が正面。
 // 画面上の「右」はプレイヤーから見た右 = 正面 +Z のとき −X。
 
 const TORSO_COLOR = '#2E5DA1';
@@ -38,13 +39,24 @@ const RUN = { amplitudeDeg: 35, hz: 2.5 };
 const DASH_HZ = 3.0;
 
 type Pivot = 'head' | 'rightArm' | 'leftArm' | 'rightLeg' | 'leftLeg';
+type LegPivot = 'rightLeg' | 'leftLeg';
+type UpperPivot = Exclude<Pivot, LegPivot>;
+
+/** 脚グループ(キャラクター.md 脚パーツと移動タイプ)。移動タイプが変わると丸ごと作り直す */
+export interface LegRig {
+  readonly locomotion: LocomotionType;
+  readonly group: THREE.Group;
+  readonly pivots: Readonly<Record<LegPivot, THREE.Group>>;
+}
 
 export interface CharacterParts {
   readonly root: THREE.Group;
   /** 倒れの傾きを掛ける胴以下の全体 */
   readonly figure: THREE.Group;
-  readonly pivots: Readonly<Record<Pivot, THREE.Group>>;
+  readonly pivots: Readonly<Record<UpperPivot, THREE.Group>>;
   readonly attachments: Readonly<Record<EquipmentSlot, THREE.Group>>;
+  /** 脚。`CharacterAnimator` が移動タイプに応じて差し替える */
+  legs: LegRig;
 }
 
 interface MotionState {
@@ -229,9 +241,8 @@ export function buildCharacterParts(): CharacterParts {
     arm.add(at(box(0.14, 0.44, 0.14, TORSO_COLOR), 0, -0.22, 0));
     arm.add(at(box(0.14, 0.12, 0.14, HAND_COLOR), 0, -0.5, 0));
   }
-  const rightLeg = pivot(figure, -0.13, 0.67, 0, 'hipR');
-  const leftLeg = pivot(figure, 0.13, 0.67, 0, 'hipL');
-  for (const leg of [rightLeg, leftLeg]) leg.add(at(box(0.16, 0.62, 0.18, LEG_COLOR), 0, -0.31, 0));
+  const legs = buildLegs('biped');
+  figure.add(legs.group);
 
   const attachment = (parent: THREE.Group, name: string) => {
     const g = new THREE.Group();
@@ -242,13 +253,35 @@ export function buildCharacterParts(): CharacterParts {
   return {
     root,
     figure,
-    pivots: { head, rightArm, leftArm, rightLeg, leftLeg },
+    pivots: { head, rightArm, leftArm },
     attachments: {
       head: attachment(head, 'attach_head'),
       rightArm: attachment(rightArm, 'attach_rightArm'),
       leftArm: attachment(leftArm, 'attach_leftArm'),
     },
+    legs,
   };
+}
+
+/** 二足の脚: 股の支点 2 つに 0.16 × 0.62 × 0.18 の箱 */
+function bipedLegs(group: THREE.Group): Record<LegPivot, THREE.Group> {
+  const rightLeg = pivot(group, -0.13, 0.67, 0, 'hipR');
+  const leftLeg = pivot(group, 0.13, 0.67, 0, 'hipL');
+  for (const leg of [rightLeg, leftLeg]) leg.add(at(box(0.16, 0.62, 0.18, LEG_COLOR), 0, -0.31, 0));
+  return { rightLeg, leftLeg };
+}
+
+/**
+ * 移動タイプに応じた脚グループを作る(F12 脚スロットと移動タイプ)。
+ * 実装済みは二足のみ。未実装のタイプは二足のパーツを使う(`effectiveLocomotion`)。
+ */
+export function buildLegs(locomotion: LocomotionType): LegRig {
+  const group = new THREE.Group();
+  group.name = 'legs';
+  const effective = effectiveLocomotion(locomotion);
+  // 将来ここに multiLeg / vehicle / tank / hover / flight の分岐を足す
+  const pivots = bipedLegs(group);
+  return { locomotion: effective, group, pivots };
 }
 
 export function meshCount(parts: CharacterParts): number {
@@ -259,15 +292,24 @@ export function meshCount(parts: CharacterParts): number {
   return n;
 }
 
+function disposeObject(o: THREE.Object3D): void {
+  if (o instanceof THREE.Mesh) {
+    (o.geometry as THREE.BufferGeometry).dispose();
+    const material: unknown = o.material;
+    if (material instanceof THREE.Material) material.dispose();
+  }
+}
+
 function disposeChildren(group: THREE.Group): void {
   for (const c of [...group.children]) {
     group.remove(c);
-    if (c instanceof THREE.Mesh) {
-      (c.geometry as THREE.BufferGeometry).dispose();
-      const material: unknown = c.material;
-      if (material instanceof THREE.Material) material.dispose();
-    }
+    disposeObject(c);
   }
+}
+
+function disposeTree(group: THREE.Group): void {
+  group.traverse((o) => disposeObject(o));
+  group.parent?.remove(group);
 }
 
 /** 押下の腕: 0 → −95 度(0.35 で最大。ease-out)→ 0(1.0。ease-in) */
@@ -312,6 +354,8 @@ export interface PlayerPose {
   readonly grounded: boolean;
   readonly dashing: boolean;
   readonly equipment: Readonly<Record<EquipmentSlot, StyleCategory>>;
+  /** 脚スロットの移動タイプ(F12)。未実装のタイプは二足として描く */
+  readonly locomotion: LocomotionType;
   /** 被弾フラッシュ 0〜0.8 */
   readonly flashOpacity: number;
 }
@@ -329,6 +373,7 @@ export class CharacterAnimator {
 
   update(pose: PlayerPose, dt: number): void {
     this.syncAttachments(pose.equipment);
+    this.syncLegs(pose.locomotion);
     this.animateTechnique(pose.motion, dt);
     this.animateLegs(pose, dt);
     this.spinOrbits(dt);
@@ -347,6 +392,17 @@ export class CharacterAnimator {
         slot === 'head' ? headAttachment(category, color) : armAttachment(category, color);
       for (const c of children) group.add(c);
     }
+  }
+
+  /** 移動タイプが(実効的に)変わったときだけ脚グループを作り直す */
+  private syncLegs(locomotion: LocomotionType): void {
+    if (this.parts.legs.locomotion === effectiveLocomotion(locomotion)) return;
+    disposeTree(this.parts.legs.group);
+    const legs = buildLegs(locomotion);
+    this.parts.figure.add(legs.group);
+    this.parts.legs = legs;
+    this.state.angles.rightLeg = 0;
+    this.state.angles.leftLeg = 0;
   }
 
   private animateTechnique(motion: PartMotion | null, dt: number): void {
@@ -396,8 +452,8 @@ export class CharacterAnimator {
       this.state.angles.rightLeg = moveToward(this.state.angles.rightLeg, 0, rate * dt);
       this.state.angles.leftLeg = moveToward(this.state.angles.leftLeg, 0, rate * dt);
     }
-    this.parts.pivots.rightLeg.rotation.x = this.state.angles.rightLeg;
-    this.parts.pivots.leftLeg.rotation.x = this.state.angles.leftLeg;
+    this.parts.legs.pivots.rightLeg.rotation.x = this.state.angles.rightLeg;
+    this.parts.legs.pivots.leftLeg.rotation.x = this.state.angles.leftLeg;
   }
 
   private spinOrbits(dt: number): void {

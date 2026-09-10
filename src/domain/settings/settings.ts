@@ -1,5 +1,6 @@
 import { findAttackStyle } from '../attackStyle/attackStyleCatalog';
 import { DEFAULT_EQUIPMENT, readEquipment, type Equipment } from '../equipment/equipment';
+import { DEFAULT_LOCOMOTION, readLocomotion, type LocomotionType } from '../locomotion/locomotion';
 import { clamp } from '../math/vec3';
 
 // 設定と永続化(F06)。localStorage の読み書きは infrastructure が行い、本モジュールは検証・移行・直列化のみを担う。
@@ -16,6 +17,8 @@ export interface Settings {
   readonly stickMode: StickMode;
   /** 装備(F12): 頭・右腕・左腕のスタイル ID。旧 `attackStyle` は読み込み時に右腕へ移行する */
   readonly equipment: Equipment;
+  /** 脚スロットの移動タイプ(F12)。未知の値は読み込み時に二足へ戻す */
+  readonly locomotion: LocomotionType;
   readonly quality: Quality;
   readonly showFps: boolean;
 }
@@ -33,6 +36,7 @@ export const defaultSettings: Settings = {
   invertCameraX: false,
   stickMode: 'floating',
   equipment: DEFAULT_EQUIPMENT,
+  locomotion: DEFAULT_LOCOMOTION,
   quality: 'medium',
   showFps: false,
 };
@@ -89,6 +93,7 @@ function fieldsFrom(data: Record<string, unknown>): Settings {
     invertCameraX: readBoolean(data.invertCameraX, defaultSettings.invertCameraX),
     stickMode: readEnum(data.stickMode, STICK_MODES, defaultSettings.stickMode),
     equipment: readEquipment(data.equipment, data.attackStyle),
+    locomotion: readLocomotion(data.locomotion),
     quality: readEnum(data.quality, QUALITIES, defaultSettings.quality),
     showFps: readBoolean(data.showFps, defaultSettings.showFps),
   };

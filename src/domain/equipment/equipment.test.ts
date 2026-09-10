@@ -6,6 +6,9 @@ import {
   readEquipment,
   shortStyleName,
   withSlot,
+  ASSEMBLY_SLOTS,
+  ASSEMBLY_SLOT_LABELS,
+  isEquipmentSlot,
 } from './equipment';
 
 describe('readEquipment(F06 / F12)', () => {
@@ -34,5 +37,13 @@ describe('readEquipment(F06 / F12)', () => {
     expect(shortStyleName('格闘')).toBe('格闘');
     expect(shortStyleName('スナイパー')).toBe('スナイ');
     expect(shortStyleName('レーザー')).toBe('レーザ');
+  });
+});
+
+describe('組み替えスロット(S05 / F12 脚スロット)', () => {
+  it('頭・右腕・左腕・脚の順で、脚は技のスロットではない', () => {
+    expect(ASSEMBLY_SLOTS).toEqual(['head', 'rightArm', 'leftArm', 'legs']);
+    expect(ASSEMBLY_SLOT_LABELS.legs).toBe('脚');
+    expect(isEquipmentSlot('legs')).toBe(false);
   });
 });

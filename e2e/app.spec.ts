@@ -12,6 +12,12 @@ declare global {
         angles: Record<'head' | 'rightArm' | 'leftArm' | 'rightLeg' | 'leftLeg', number>;
         attachments: Record<'head' | 'rightArm' | 'leftArm', number>;
       } | null;
+      preview?: () => {
+        running: boolean;
+        attachments: Record<'head' | 'rightArm' | 'leftArm', number>;
+        locomotion: string;
+        demo: string | null;
+      } | null;
     };
   }
 }
@@ -618,14 +624,15 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
     expect(await enemyHp(page, 3)).toBeLessThanOrEqual(25);
   });
 
-  test('S03 の装備: 右腕 行から S05 が右腕タブで開き、選択が保存されて S03 の表示名が変わる', async ({
+  test('S03 の「装備を組み替える」で S05 が右腕タブで開き、選択が保存されてスロットタブの装備名が変わる', async ({
     page,
   }) => {
     await startGame(page);
     await tap(page, 'pause');
-    await expect(page.getByTestId('setting-equipment-rightArm')).toContainText('格闘');
-    await tap(page, 'setting-equipment-rightArm');
-    await expect(page.locator('[data-screen="styleSelect"]')).toBeVisible();
+    await tap(page, 'setting-equipment');
+    await expect(page.locator('[data-screen="equipment"]')).toBeVisible();
+    await expect(page.getByTestId('slot-tab-rightArm')).toHaveClass(/on/);
+    await expect(page.getByTestId('slot-tab-rightArm')).toContainText('格闘');
     await expect(page.getByTestId('style-category-sword')).toHaveClass(/on/);
     await tap(page, 'style-category-firearm');
     await tap(page, 'style-item-shotgun');
@@ -634,25 +641,24 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
     await expect(page.getByTestId('style-unimplemented')).toHaveCount(0);
     const stored = await page.evaluate(() => localStorage.getItem('b3d.settings.v1'));
     expect(stored).toContain('"rightArm":"shotgun"');
+    await expect(page.getByTestId('slot-tab-rightArm')).toContainText('ショットガン');
     await tap(page, 'style-done');
-    await expect(page.locator('[data-screen="styleSelect"]')).toBeHidden();
+    await expect(page.locator('[data-screen="equipment"]')).toBeHidden();
     await expect(page.locator('[data-screen="pause"]')).toBeVisible();
-    await expect(page.getByTestId('setting-equipment-rightArm')).toContainText(
-      'ショットガン(銃火器)',
-    );
     await tap(page, 'resume');
     await expect(page.getByTestId('style-name')).toContainText('右: ショットガン');
   });
 
-  test('S03 の装備: 左腕 行から S05 が左腕タブで開き、頭タブに切り替えて選んだ装備が頭に保存される(F12 / S05)', async ({
+  test('S05 の左腕タブ・頭タブを切り替えて選んだ装備がそれぞれのスロットに保存される(F12 / S05)', async ({
     page,
   }) => {
     await startGame(page);
     await tap(page, 'pause');
-    await expect(page.getByTestId('setting-equipment-head')).toContainText('レーザー');
-    await expect(page.getByTestId('setting-equipment-leftArm')).toContainText('衝撃波');
-    await tap(page, 'setting-equipment-leftArm');
-    await expect(page.locator('[data-screen="styleSelect"]')).toBeVisible();
+    await tap(page, 'setting-equipment');
+    await expect(page.locator('[data-screen="equipment"]')).toBeVisible();
+    await expect(page.getByTestId('slot-tab-head')).toContainText('レーザー');
+    await expect(page.getByTestId('slot-tab-leftArm')).toContainText('衝撃波');
+    await tap(page, 'slot-tab-leftArm');
     await expect(page.getByTestId('slot-tab-leftArm')).toHaveClass(/on/);
     await expect(page.getByTestId('style-category-magic')).toHaveClass(/on/);
     await expect(page.getByTestId('style-item-shockwave')).toHaveClass(/on/);
@@ -665,9 +671,9 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
     const stored = await page.evaluate(() => localStorage.getItem('b3d.settings.v1'));
     expect(stored).toContain('"head":"bow"');
     expect(stored).toContain('"leftArm":"shockwave"');
+    await expect(page.getByTestId('slot-tab-head')).toContainText('弓');
+    await expect(page.getByTestId('slot-tab-leftArm')).toContainText('衝撃波');
     await tap(page, 'style-done');
-    await expect(page.getByTestId('setting-equipment-head')).toContainText('弓');
-    await expect(page.getByTestId('setting-equipment-leftArm')).toContainText('衝撃波');
     await tap(page, 'resume');
     await expect(page.getByTestId('btn-head')).toContainText('弓');
     await expect(page.getByTestId('btn-leftArm')).toContainText('衝撃波');
@@ -704,7 +710,7 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
   test('S05 は 10 系統 × 10 スタイルを一覧に出し、未実装のスタイルは無い', async ({ page }) => {
     await startGame(page);
     await tap(page, 'pause');
-    await tap(page, 'setting-equipment-rightArm');
+    await tap(page, 'setting-equipment');
     const categories = [
       'sword',
       'strike',
@@ -723,7 +729,7 @@ test.describe('攻撃スタイルと長押し攻撃(F03 / F04 / F06)', () => {
       await expect(page.getByTestId('style-list').getByText('未実装')).toHaveCount(0);
     }
     await tap(page, 'style-close');
-    await expect(page.locator('[data-screen="styleSelect"]')).toBeHidden();
+    await expect(page.locator('[data-screen="equipment"]')).toBeHidden();
   });
 
   test('ショットガン: 攻撃ボタンで 5 本の散弾が出て正面の徘徊型にダメージが入る', async ({
@@ -833,5 +839,127 @@ test.describe('HUD のバー表示(S02 要素 2・3)', () => {
     const en = await page.getByTestId('energy-bar').boundingBox();
     expect(en).not.toBeNull();
     if (en) expect(en.width).toBeGreaterThanOrEqual(120);
+  });
+});
+
+test.describe('S05 装備組み替え: 脚スロット・プレビュー・縦画面(F12 / S05 / #99963)', () => {
+  async function startDebug(page: Page): Promise<void> {
+    await page.goto('./?debug=1');
+    const start = page.getByTestId('start');
+    await expect(start).toBeEnabled({ timeout: 30_000 });
+    await start.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
+    await expect(page.getByTestId('action-buttons')).toBeVisible();
+  }
+
+  test('脚タブに移動タイプ 6 件が出て、二足以外は未実装。選ぶと locomotion に保存され再読み込み後も保持される', async ({
+    page,
+  }) => {
+    await startGame(page);
+    await tap(page, 'pause');
+    await tap(page, 'setting-equipment');
+    await expect(page.getByTestId('slot-tab-legs')).toContainText('二足');
+    await tap(page, 'slot-tab-legs');
+    await expect(page.getByTestId('slot-tab-legs')).toHaveClass(/on/);
+    await expect(page.getByTestId('style-tabs')).toBeHidden();
+    await expect(page.getByTestId('style-list').locator('button')).toHaveCount(6);
+    await expect(page.getByTestId('style-list').getByText('未実装')).toHaveCount(5);
+    await expect(page.getByTestId('locomotion-item-biped')).toHaveClass(/on/);
+    await expect(page.getByTestId('locomotion-unimplemented')).toHaveCount(0);
+    await tap(page, 'locomotion-item-hover');
+    await expect(page.getByTestId('locomotion-item-hover')).toHaveClass(/on/);
+    await expect(page.getByTestId('style-detail-name')).toHaveText('浮遊');
+    await expect(page.getByTestId('locomotion-unimplemented')).toBeVisible();
+    await expect(page.getByTestId('slot-tab-legs')).toContainText('浮遊');
+    const stored = await page.evaluate(() => localStorage.getItem('b3d.settings.v1'));
+    expect(stored).toContain('"locomotion":"hover"');
+    // 頭 / 腕の装備は変わらない
+    expect(stored).toContain('"rightArm":"melee"');
+    await page.reload();
+    await expect(page.getByTestId('start')).toBeEnabled({ timeout: 30_000 });
+    const after = await page.evaluate(() => localStorage.getItem('b3d.settings.v1'));
+    expect(after).toContain('"locomotion":"hover"');
+  });
+
+  test('プレビュー(小窓)は S05 表示中だけ描画し、選んだ装備の付属物とデモモーションを反映する', async ({
+    page,
+  }) => {
+    await startDebug(page);
+    await tap(page, 'pause');
+    expect(await page.evaluate(() => window.__b3dDebug?.preview?.() ?? null)).toBeNull();
+    await tap(page, 'setting-equipment');
+    await expect(page.getByTestId('equipment-preview')).toBeVisible();
+    await page.waitForFunction(() => window.__b3dDebug?.preview?.()?.running === true);
+    const box = await page.getByTestId('equipment-preview').boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      expect(box.width).toBeGreaterThan(100);
+      expect(box.height).toBeGreaterThan(100);
+    }
+    const info = await page.evaluate(() => window.__b3dDebug?.preview?.() ?? null);
+    expect(info?.attachments.head).toBeGreaterThan(0);
+    expect(info?.attachments.rightArm).toBeGreaterThan(0);
+    expect(info?.attachments.leftArm).toBeGreaterThan(0);
+    expect(info?.locomotion).toBe('biped');
+    await tap(page, 'slot-tab-head');
+    await tap(page, 'style-category-ranged');
+    await tap(page, 'style-item-bow');
+    // 選んだ瞬間にそのスロットのデモ(押下モーション)が始まる
+    expect((await page.evaluate(() => window.__b3dDebug?.preview?.()?.demo)) ?? null).toBe('head');
+    // 本編のキャラクターの付属物も差し替わる(S03 の背景)
+    await page.waitForFunction(
+      () => (window.__b3dDebug?.view()?.player.equipment.head.category ?? '') === 'ranged',
+    );
+    await tap(page, 'style-close');
+    await expect(page.locator('[data-screen="equipment"]')).toBeHidden();
+    expect(await page.evaluate(() => window.__b3dDebug?.preview?.()?.running)).toBe(false);
+  });
+
+  test('縦画面(390×844)で S03 の設定行が重ならず、S05 が表示領域内に収まる(F09 / S03 / S05)', async ({
+    page,
+  }) => {
+    await startGame(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator(':root')).toHaveAttribute('data-orientation', 'portrait');
+    await tap(page, 'pause');
+    const rows = page.locator('[data-screen="pause"] .setting-row');
+    const count = await rows.count();
+    expect(count).toBe(7);
+    let bottom = -Infinity;
+    for (let i = 0; i < count; i++) {
+      const b = await rows.nth(i).boundingBox();
+      expect(b).not.toBeNull();
+      if (!b) continue;
+      expect(b.y).toBeGreaterThanOrEqual(bottom - 1);
+      expect(b.x + b.width).toBeLessThanOrEqual(390);
+      bottom = b.y + b.height;
+    }
+    const equipmentButton = await page.getByTestId('setting-equipment').boundingBox();
+    expect(equipmentButton).not.toBeNull();
+    if (equipmentButton) expect(equipmentButton.x + equipmentButton.width).toBeLessThanOrEqual(390);
+    await tap(page, 'setting-equipment');
+    const screen = await page.locator('[data-screen="equipment"]').boundingBox();
+    expect(screen).not.toBeNull();
+    if (screen) {
+      expect(screen.width).toBeLessThanOrEqual(390);
+      expect(screen.height).toBeLessThanOrEqual(844);
+    }
+    const preview = await page.getByTestId('equipment-preview').boundingBox();
+    const list = await page.getByTestId('style-list').boundingBox();
+    const done = await page.getByTestId('style-done').boundingBox();
+    expect(preview && list && done).toBeTruthy();
+    if (preview && list && done) {
+      expect(preview.height).toBeCloseTo(180, -1);
+      expect(list.y).toBeGreaterThanOrEqual(preview.y + preview.height - 1);
+      expect(done.y + done.height).toBeLessThanOrEqual(844);
+    }
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+    // 横画面に戻しても閉じない
+    await page.setViewportSize({ width: 844, height: 390 });
+    await expect(page.locator(':root')).toHaveAttribute('data-orientation', 'landscape');
+    await expect(page.locator('[data-screen="equipment"]')).toBeVisible();
+    await expect(page.getByTestId('equipment-preview')).toBeVisible();
   });
 });

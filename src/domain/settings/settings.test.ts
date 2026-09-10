@@ -47,6 +47,7 @@ describe('parseSettings(F06 読み込み)', () => {
       invertCameraX: true,
       stickMode: 'fixed' as const,
       equipment: { ...DEFAULT_EQUIPMENT, rightArm: 'gun' } as const,
+      locomotion: 'hover' as const,
       quality: 'high' as const,
       showFps: true,
     };
@@ -175,5 +176,26 @@ describe('equipment(F06 / F12)', () => {
     });
     expect(raw).toContain('"rightArm":"gun"');
     expect(raw).not.toContain('attackStyle');
+  });
+});
+
+describe('locomotion(F06 / F12 脚スロット)', () => {
+  it('キーが無いデータでは二足', () => {
+    expect(parseSettings(JSON.stringify({ version: 1 })).locomotion).toBe('biped');
+  });
+  it('未知の値は二足に戻し、未実装のタイプ(hover)は保持する', () => {
+    expect(parseSettings(JSON.stringify({ version: 1, locomotion: 'wheels' })).locomotion).toBe(
+      'biped',
+    );
+    expect(parseSettings(JSON.stringify({ version: 1, locomotion: 'hover' })).locomotion).toBe(
+      'hover',
+    );
+  });
+  it('直列化に locomotion が含まれる', () => {
+    expect(JSON.parse(serializeSettings({ ...defaultSettings, locomotion: 'tank' }))).toMatchObject(
+      {
+        locomotion: 'tank',
+      },
+    );
   });
 });
